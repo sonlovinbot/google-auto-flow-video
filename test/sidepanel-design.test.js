@@ -55,9 +55,49 @@ test("new sidepanel exposes four real work tabs and their panes", () => {
 test("image prompt rows include a replaceable thumbnail without losing prompt UI", () => {
   assert.match(handlers, /image-prompt-media/);
   assert.match(handlers, /replacementInput\.addEventListener\("change"/);
-  assert.match(handlers, /prompt: currentPrompt/);
+  // Replacing an image must carry the row's existing prompt across.
+  assert.match(handlers, /\.\.\.pair,/);
+  assert.match(handlers, /renderImagePromptPairs\(true\)/);
   assert.match(handlers, /row\.append\(rowIndex, imagePicker, copy/);
   assert.match(css, /\.image-prompt-media img/);
+});
+
+test("filmstrip renders each image once with prompts between them", () => {
+  assert.match(handlers, /function createImageRow\(/);
+  assert.match(handlers, /function createTransitionLink\(/);
+  assert.match(handlers, /filmstrip-link/);
+  assert.match(handlers, /filmstrip-summary/);
+  assert.match(css, /\.filmstrip-link \{/);
+  assert.match(css, /\.filmstrip-link-body \{/);
+  assert.match(css, /\.filmstrip-gap \{/);
+});
+
+test("reorder buttons move images and re-render preserving prompts", () => {
+  assert.match(handlers, /filmstrip-move-/);
+  assert.match(handlers, /function swapImages\(/);
+  // `false` here would rebuild prompts from the stale textarea and lose them.
+  assert.match(handlers, /renderImagePromptPairs\(true\);\n\s*if \(isFramePairMode/);
+  assert.match(css, /\.filmstrip-move \{/);
+});
+
+test("frame mode switch mirrors the mode-switch pattern without colliding", () => {
+  assert.match(html, /id="frameModeSelector"[^>]*class="visually-hidden"/);
+  assert.match(html, /data-frame-mode="chained"/);
+  assert.match(html, /data-frame-mode="discrete"/);
+  // Reusing .mode-option would make design-ui.js write the main mode selector.
+  assert.doesNotMatch(html, /class="mode-option"[^>]*data-frame-mode/);
+  assert.match(css, /\.mode-switch-triple \{/);
+  assert.match(css, /\.frame-option \{/);
+});
+
+test("the 400px breakpoint mirrors the four-track row grid", () => {
+  const narrow = css.slice(css.indexOf("@media (max-width: 400px)"));
+  assert.match(
+    narrow,
+    /\.image-prompt-pair,\s*\n\s*\.filmstrip-link \{\s*\n\s*grid-template-columns: 22px 58px minmax\(0, 1fr\) 26px;/,
+  );
+  // The connector rail is dropped so the prompt keeps usable width at 340px.
+  assert.match(narrow, /\.filmstrip-link-rail \{\s*\n\s*display: none;/);
 });
 
 test("design stays compact and responsive for Chrome side panels", () => {

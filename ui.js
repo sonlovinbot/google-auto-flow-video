@@ -1,6 +1,7 @@
 import { dom } from "./dom.js";
 import { state } from "./state.js";
 import { i18n } from "./i18n.js";
+import { countTransitions, normalizeFrameMode } from "./prompt-parser.js";
 
 const LOG_LEVEL_ICONS = {
   system: "🔵",
@@ -170,6 +171,26 @@ export function updateUIAfterModeChange() {
   );
   dom.promptsTextarea.placeholder = i18n("prompt_placeholder");
   dom.aspectRatioSelector.disabled = false;
+  updateFrameModeHint();
+}
+
+/**
+ * Explains what the selected frame mode will produce for the current image
+ * count. Lives here so it is refreshed by both the mode switch and a language
+ * change, which both already route through updateUIAfterModeChange().
+ */
+export function updateFrameModeHint() {
+  if (!dom.frameModeHint) return;
+  const frameMode = normalizeFrameMode(dom.frameModeSelector?.value);
+  const images = state.imageFileList.length;
+  dom.frameModeHint.textContent = i18n(
+    frameMode === "chained"
+      ? "frame_mode_hint_chained"
+      : frameMode === "discrete"
+        ? "frame_mode_hint_discrete"
+        : "frame_mode_hint_single",
+    { count: images, videos: countTransitions(images, frameMode) },
+  );
 }
 
 export function updateModelSpecificSettings() {

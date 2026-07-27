@@ -6,6 +6,7 @@ import {
   updateButtonStates,
   updateInterfaceVisibility,
   updateUIAfterModeChange,
+  updateFrameModeHint,
   logMessage,
   updateQueueModal,
   updateModelSpecificSettings,
@@ -42,6 +43,250 @@ function getImagePreviewUrl(file) {
   return url;
 }
 
+/**
+ * Persist the prompts the user typed into the rows.
+ *
+ * In single mode the big textarea stays the canonical store, exactly as before.
+ * In frame modes it cannot be: `parsePrompts` drops empty entries, so mirroring
+ * N-1 rows through it would shift every prompt up past a blank one. There the
+ * rows are canonical and the textarea is a one-way bulk inbox.
+ */
+function persistRowPrompts(frameMode) {
+  if (isFramePairMode(frameMode)) {
+    chrome.storage.local.set({
+      framePrompts: state.imagePromptPairs.map((pair) => pair.prompt),
+    });
+    return;
+  }
+  dom.promptsTextarea.value = state.imagePromptPairs
+    .map((pair) => pair.prompt.trim())
+    .join("\n\n");
+  chrome.storage.local.set({ prompts: dom.promptsTextarea.value });
+}
+
+function swapImages(from, to) {
+  const files = state.imageFileList;
+  if (to < 0 || to >= files.length) return;
+  [files[from], files[to]] = [files[to], files[from]];
+  renderImagePromptPairs(true);
+  if (isFramePairMode(currentFrameMode())) {
+    logMessage(i18n("log_frame_reorder_warning"), "warn");
+  }
+}
+
+function createMoveControls(index, total) {
+  const box = document.createElement("div");
+  box.className = "filmstrip-move";
+
+  const makeButton = (direction, icon, ariaKey, disabled) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `filmstrip-move-${direction}`;
+    button.disabled = disabled;
+    button.setAttribute("aria-label", i18n(ariaKey, { index: index + 1 }));
+    const glyph = document.createElement("span");
+    glyph.className = "material-symbols-outlined";
+    glyph.setAttribute("aria-hidden", "true");
+    glyph.textContent = icon;
+    button.appendChild(glyph);
+    button.addEventListener("click", () =>
+      swapImages(index, direction === "up" ? index - 1 : index + 1),
+    );
+    return button;
+  };
+
+  box.append(
+    makeButton("up", "arrow_upward", "image_row_move_up_aria", index === 0),
+    makeButton(
+      "down",
+      "arrow_downward",
+      "image_row_move_down_aria",
+      index === total - 1,
+    ),
+  );
+  return box;
+}
+
+/**
+ * One image card. `withPrompt` reproduces the original single-mode row exactly;
+ * frame modes render the prompt in the connector between two cards instead.
+ */
+function createImageRow(file, index, { total, roleKey, withPrompt, pair }) {
+  const row = document.createElement("div");
+  row.className = "image-prompt-pair filmstrip-frame";
+
+  const rowIndex = document.createElement("div");
+  rowIndex.className = "image-prompt-index";
+  rowIndex.textContent = String(index + 1).padStart(2, "0");
+
+  const imagePicker = document.createElement("button");
+  imagePicker.type = "button";
+  imagePicker.className = "image-prompt-media";
+  imagePicker.setAttribute(
+    "aria-label",
+    i18n("image_row_replace_aria", { filename: file.name }),
+  );
+
+  const preview = document.createElement("img");
+  preview.src = getImagePreviewUrl(file);
+  preview.alt = file.name;
+  imagePicker.appendChild(preview);
+
+  const replacementInput = document.createElement("input");
+  replacementInput.type = "file";
+  replacementInput.accept = "image/*";
+  replacementInput.hidden = true;
+  imagePicker.addEventListener("click", () => replacementInput.click());
+  replacementInput.addEventListener("change", () => {
+    const replacement = replacementInput.files?.[0];
+    if (!replacement) return;
+    // Replacing the image must never discard the prompts already edited around
+    // it, so only the file list changes and the rows are rebuilt from it.
+    state.imageFileList[index] = replacement;
+    if (pair) {
+      state.imagePromptPairs[index] = {
+        ...pair,
+        key: getImageFileKey(replacement),
+        file: replacement,
+        first: replacement,
+      };
+    }
+    renderImagePromptPairs(true);
+    logMessage(
+      i18n("log_image_row_replaced", {
+        index: index + 1,
+        filename: replacement.name,
+      }),
+      "info",
+    );
+  });
+
+  const copy = document.createElement("div");
+  copy.className = "image-prompt-copy";
+
+  const filename = document.createElement("div");
+  filename.className = "image-prompt-file";
+  filename.textContent = file.name;
+  filename.title = file.name;
+  copy.appendChild(filename);
+
+  if (roleKey) {
+    const role = document.createElement("div");
+    role.className = "filmstrip-frame-role";
+    role.textContent = i18n(roleKey);
+    copy.appendChild(role);
+  }
+
+  if (withPrompt && pair) {
+    copy.appendChild(createPromptInput(pair, "single"));
+  }
+
+  row.append(rowIndex, imagePicker, copy, createMoveControls(index, total));
+  row.appendChild(replacementInput);
+  return row;
+}
+
+function createPromptInput(pair, frameMode) {
+  const promptInput = document.createElement("textarea");
+  promptInput.className = "image-prompt-input";
+  promptInput.value = pair.prompt;
+  promptInput.placeholder = isFramePairMode(frameMode)
+    ? i18n("filmstrip_prompt_placeholder", {
+        first: pair.firstIndex + 1,
+        last: pair.lastIndex + 1,
+      })
+    : i18n("image_row_prompt_placeholder", { filename: pair.file.name });
+  // Slot index is the identity: a repeated file would make the key ambiguous.
+  promptInput.dataset.pairIndex = String(pair.index);
+  promptInput.addEventListener("input", () => {
+    const draft = state.imagePromptPairs[Number(promptInput.dataset.pairIndex)];
+    if (!draft) return;
+    draft.prompt = promptInput.value;
+    persistRowPrompts(frameMode);
+  });
+  return promptInput;
+}
+
+function createTransitionLink(pair) {
+  const link = document.createElement("div");
+  link.className = "filmstrip-link";
+  link.dataset.transitionIndex = String(pair.index);
+
+  const rail = document.createElement("div");
+  rail.className = "filmstrip-link-rail";
+
+  const body = document.createElement("div");
+  body.className = "filmstrip-link-body";
+
+  const title = document.createElement("div");
+  title.className = "filmstrip-link-title";
+  title.textContent = i18n("filmstrip_transition_title", {
+    index: pair.index + 1,
+    first: pair.firstIndex + 1,
+    last: pair.lastIndex + 1,
+  });
+
+  body.append(title, createPromptInput(pair, "chained"));
+  link.append(rail, body);
+  return link;
+}
+
+function createWarning(text) {
+  const warning = document.createElement("div");
+  warning.className = "filmstrip-warning";
+  warning.textContent = text;
+  return warning;
+}
+
+function renderFilmstripHeader(container, built, imageCount) {
+  const summary = document.createElement("div");
+  summary.className = "filmstrip-summary";
+  summary.textContent = isFramePairMode(built.frameMode)
+    ? i18n("filmstrip_summary", {
+        images: imageCount,
+        transitions: built.pairs.length,
+        videos: built.pairs.length,
+      })
+    : i18n("filmstrip_summary_single", {
+        images: imageCount,
+        videos: built.pairs.length,
+      });
+  container.appendChild(summary);
+
+  if (built.excessPrompts.length > 0) {
+    container.appendChild(
+      createWarning(
+        i18n("filmstrip_warn_excess_prompts", {
+          count: built.excessPrompts.length,
+          transitions: built.pairs.length,
+        }),
+      ),
+    );
+  }
+  if (built.unusedImageIndices.length > 0) {
+    container.appendChild(
+      createWarning(
+        i18n("filmstrip_warn_odd_image", {
+          count: built.unusedImageIndices.length,
+        }),
+      ),
+    );
+  }
+  if (isFramePairMode(built.frameMode) && imageCount < 2) {
+    container.appendChild(createWarning(i18n("filmstrip_warn_need_two")));
+  }
+}
+
+function frameRoleKey(imageIndex, built) {
+  if (!isFramePairMode(built.frameMode)) return null;
+  const isFirst = built.pairs.some((pair) => pair.firstIndex === imageIndex);
+  const isLast = built.pairs.some((pair) => pair.lastIndex === imageIndex);
+  if (isFirst && isLast) return "filmstrip_role_both";
+  if (isLast) return "filmstrip_role_last";
+  if (isFirst) return "filmstrip_role_first";
+  return null;
+}
+
 function renderImagePromptPairs(preserveExisting = true) {
   if (!dom.imagePromptPairsContainer) return;
   if (
@@ -51,99 +296,57 @@ function renderImagePromptPairs(preserveExisting = true) {
     dom.imagePromptPairsContainer.innerHTML = "";
     dom.imagePromptPairsContainer.style.display = "none";
     state.imagePromptPairs = [];
+    state.framePairsMeta = null;
     return;
   }
 
+  const frameMode = currentFrameMode();
   const prompts = parsePrompts(dom.promptsTextarea.value);
   const built = buildFramePairs(
     state.imageFileList,
     prompts,
     preserveExisting ? state.imagePromptPairs : [],
-    currentFrameMode(),
+    frameMode,
   );
   state.imagePromptPairs = built.pairs;
   state.framePairsMeta = built;
-  dom.imagePromptPairsContainer.innerHTML = "";
 
-  state.imagePromptPairs.forEach((pair, index) => {
-    const row = document.createElement("div");
-    row.className = "image-prompt-pair";
+  const container = dom.imagePromptPairsContainer;
+  container.innerHTML = "";
+  container.dataset.frameMode = built.frameMode;
+  const imageCount = state.imageFileList.length;
+  renderFilmstripHeader(container, built, imageCount);
 
-    const rowIndex = document.createElement("div");
-    rowIndex.className = "image-prompt-index";
-    rowIndex.textContent = String(index + 1).padStart(2, "0");
+  const pairMode = isFramePairMode(built.frameMode);
+  const linkAfterImage = new Map();
+  if (pairMode) {
+    for (const pair of built.pairs) linkAfterImage.set(pair.firstIndex, pair);
+  }
+  const unused = new Set(built.unusedImageIndices);
 
-    const imagePicker = document.createElement("button");
-    imagePicker.type = "button";
-    imagePicker.className = "image-prompt-media";
-    imagePicker.setAttribute(
-      "aria-label",
-      i18n("image_row_replace_aria", { filename: pair.file.name }),
-    );
-
-    const preview = document.createElement("img");
-    preview.src = getImagePreviewUrl(pair.file);
-    preview.alt = pair.file.name;
-    imagePicker.appendChild(preview);
-
-    const replacementInput = document.createElement("input");
-    replacementInput.type = "file";
-    replacementInput.accept = "image/*";
-    replacementInput.hidden = true;
-    imagePicker.addEventListener("click", () => replacementInput.click());
-    replacementInput.addEventListener("change", () => {
-      const replacement = replacementInput.files?.[0];
-      if (!replacement) return;
-      // Replacing the image must never discard the prompt edited for this row.
-      const currentPrompt = pair.prompt;
-      state.imageFileList[index] = replacement;
-      state.imagePromptPairs[index] = {
-        key: getImageFileKey(replacement),
-        file: replacement,
-        prompt: currentPrompt,
-      };
-      renderImagePromptPairs(true);
-      logMessage(
-        i18n("log_image_row_replaced", {
-          index: index + 1,
-          filename: replacement.name,
-        }),
-        "info",
-      );
+  state.imageFileList.forEach((file, index) => {
+    const row = createImageRow(file, index, {
+      total: imageCount,
+      roleKey: frameRoleKey(index, built),
+      withPrompt: !pairMode,
+      pair: pairMode ? null : built.pairs[index],
     });
+    if (unused.has(index)) row.classList.add("filmstrip-frame-unused");
+    container.appendChild(row);
 
-    const copy = document.createElement("div");
-    copy.className = "image-prompt-copy";
-
-    const filename = document.createElement("div");
-    filename.className = "image-prompt-file";
-    filename.textContent = pair.file.name;
-    filename.title = pair.file.name;
-
-    const promptInput = document.createElement("textarea");
-    promptInput.className = "image-prompt-input";
-    promptInput.value = pair.prompt;
-    promptInput.placeholder = i18n("image_row_prompt_placeholder", {
-      filename: pair.file.name,
-    });
-    promptInput.dataset.pairKey = pair.key;
-    promptInput.addEventListener("input", () => {
-      const draft = state.imagePromptPairs.find(
-        (candidate) => candidate.key === promptInput.dataset.pairKey,
-      );
-      if (!draft) return;
-      draft.prompt = promptInput.value;
-      dom.promptsTextarea.value = state.imagePromptPairs
-        .map((candidate) => candidate.prompt.trim())
-        .join("\n\n");
-      chrome.storage.local.set({ prompts: dom.promptsTextarea.value });
-    });
-
-    copy.append(filename, promptInput);
-    row.append(rowIndex, imagePicker, copy, replacementInput);
-    dom.imagePromptPairsContainer.appendChild(row);
+    if (!pairMode) return;
+    const link = linkAfterImage.get(index);
+    if (link) {
+      container.appendChild(createTransitionLink(link));
+    } else if (index < imageCount - 1) {
+      // Discrete mode: the boundary between two independent pairs.
+      const gap = document.createElement("div");
+      gap.className = "filmstrip-gap";
+      container.appendChild(gap);
+    }
   });
-  dom.imagePromptPairsContainer.style.display = "block";
+
+  container.style.display = "block";
 }
 
 function activateTab(tabName) {
@@ -245,6 +448,23 @@ function handleModeChange(event) {
   renderImagePromptPairs();
 }
 
+function handleFrameModeChange(event) {
+  const frameMode = normalizeFrameMode(event.target.value);
+  chrome.storage.local.set({ frameMode });
+  // Prompts are kept: buildFramePairs recovers them by slot even when the
+  // number of slots changes, so switching modes to compare is non-destructive.
+  renderImagePromptPairs(true);
+  updateFrameModeHint();
+  logMessage(
+    i18n("log_frame_mode_changed", {
+      mode: frameMode,
+      images: state.imageFileList.length,
+      videos: countTransitions(state.imageFileList.length, frameMode),
+    }),
+    "info",
+  );
+}
+
 function logImageSortOrder() {
   const orderLabel =
     dom.imageSortSelector.options[dom.imageSortSelector.selectedIndex].text;
@@ -264,6 +484,7 @@ function handleImageSelection(event) {
   renderImagePromptPairs(false);
   dom.imageCount.textContent = state.imageFileList.length;
   dom.imageFileSummary.style.display = "block";
+  updateFrameModeHint();
   logImageSortOrder();
 }
 
@@ -272,6 +493,9 @@ function handleImageSortChange(event) {
   sortImageFiles(event.target.value);
   renderImagePromptPairs();
   logImageSortOrder();
+  if (isFramePairMode(currentFrameMode())) {
+    logMessage(i18n("log_frame_reorder_warning"), "warn");
+  }
 }
 
 function handlePromptFileUpload(event) {
@@ -714,6 +938,7 @@ export function attachEventListeners() {
       persistOnEvent("downloadSaveMode", fromTarget),
     );
     dom.modeSelector.addEventListener("change", handleModeChange);
+    dom.frameModeSelector?.addEventListener("change", handleFrameModeChange);
     dom.aspectRatioSelector.addEventListener(
       "change",
       persistOnEvent("aspectRatio", fromTarget),

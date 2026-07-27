@@ -312,7 +312,8 @@ textarea:disabled {
   box-shadow: 2px 2px 0 rgb(36 33 29 / 75%);
 }
 
-.mode-option {
+.mode-option,
+.frame-option {
   min-height: 44px;
   padding: 8px;
   background: var(--surface);
@@ -320,13 +321,20 @@ textarea:disabled {
   font-weight: 900;
 }
 
-.mode-option + .mode-option {
+.mode-option + .mode-option,
+.frame-option + .frame-option {
   border-left: 1px solid var(--line);
 }
 
-.mode-option.active {
+.mode-option.active,
+.frame-option.active {
   color: #fffaf2;
   background: var(--blue);
+}
+
+.frame-option {
+  min-height: 38px;
+  font-size: 12px;
 }
 
 .run-profile {
@@ -448,7 +456,7 @@ select:focus {
 
 .image-prompt-pair {
   display: grid;
-  grid-template-columns: 24px 68px minmax(0, 1fr);
+  grid-template-columns: 24px 68px minmax(0, 1fr) 28px;
   gap: 9px;
   align-items: stretch;
   padding: 10px 0;
@@ -517,6 +525,117 @@ select:focus {
   min-height: 66px;
   margin: 0;
   font-size: 12px;
+}
+
+/* --- Filmstrip: each image once, the prompt sits between two images --- */
+
+#frameModeContainer {
+  margin-bottom: 12px;
+}
+
+.mode-switch-triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.frame-mode-hint {
+  margin: 6px 0 0;
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+
+.filmstrip-summary {
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.filmstrip-warning {
+  padding: 7px 9px;
+  margin: 6px 0;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.filmstrip-frame-role {
+  margin-bottom: 5px;
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.filmstrip-frame-unused {
+  opacity: 0.45;
+}
+
+.filmstrip-move {
+  display: grid;
+  grid-template-rows: repeat(2, 26px);
+  gap: 4px;
+  align-content: start;
+  padding-top: 4px;
+}
+
+.filmstrip-move button {
+  display: grid;
+  padding: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  place-items: center;
+}
+
+.filmstrip-move button[disabled] {
+  opacity: 0.35;
+}
+
+.filmstrip-move .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.filmstrip-link {
+  display: grid;
+  grid-template-columns: 24px 68px minmax(0, 1fr) 28px;
+  gap: 9px;
+  padding: 0 0 10px;
+}
+
+.filmstrip-link-rail {
+  position: relative;
+  grid-column: 2;
+  margin-left: 32px;
+  border-left: 2px dashed var(--line);
+}
+
+.filmstrip-link-rail::after {
+  position: absolute;
+  bottom: 0;
+  left: -9px;
+  color: var(--ink-muted);
+  content: "arrow_downward";
+  font-family: "Material Symbols Outlined";
+  font-size: 15px;
+}
+
+.filmstrip-link-body {
+  grid-column: 3 / -1;
+  min-width: 0;
+}
+
+.filmstrip-link-title {
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.filmstrip-gap {
+  margin: 2px 0 8px;
+  border-top: 1px dashed var(--line-soft);
 }
 
 .job-folder-row {
@@ -968,8 +1087,29 @@ input[type="checkbox"]:checked::before {
     grid-column: 1;
   }
 
-  .image-prompt-pair {
-    grid-template-columns: 22px 58px minmax(0, 1fr);
+  .image-prompt-pair,
+  .filmstrip-link {
+    grid-template-columns: 22px 58px minmax(0, 1fr) 26px;
+  }
+
+  /* Drop the connector rail and let the prompt span the freed tracks. */
+  .filmstrip-link-rail {
+    display: none;
+  }
+
+  .filmstrip-link-body {
+    grid-column: 2 / -1;
+    padding-left: 8px;
+    border-left: 2px dashed var(--line);
+  }
+
+  .filmstrip-move {
+    grid-template-rows: repeat(2, 24px);
+  }
+
+  .frame-option {
+    padding: 6px 2px;
+    font-size: 11px;
   }
 }
 

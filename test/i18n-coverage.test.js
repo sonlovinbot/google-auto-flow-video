@@ -49,12 +49,12 @@ test("Vietnamese and English define exactly the same keys", () => {
 
 test("no dead translation keys are shipped", () => {
   const referenced = referencedKeys();
-  // Keys picked dynamically, e.g. i18n(cond ? "a" : "b", ...).
-  for (const match of source.matchAll(
-    /\?\s*"([a-z0-9_]+)"\s*\n?\s*:\s*"([a-z0-9_]+)"/gi,
-  )) {
-    if (translations.en[match[1]]) referenced.add(match[1]);
-    if (translations.en[match[2]]) referenced.add(match[2]);
+  // Keys are also reached indirectly: through a ternary, through a helper that
+  // returns a key name, or as a function argument. Any bare string literal that
+  // exactly matches a key name counts as a reference. Key names are distinctive
+  // snake_case, so a coincidental match is not a realistic risk.
+  for (const match of source.matchAll(/"([a-z][a-z0-9_]{3,})"/g)) {
+    if (translations.en[match[1]] !== undefined) referenced.add(match[1]);
   }
   const unused = Object.keys(translations.en).filter(
     (key) => !referenced.has(key),

@@ -14,6 +14,16 @@ function syncModeButtons() {
   });
 }
 
+function syncFrameButtons() {
+  const frameModeSelector = document.getElementById("frameModeSelector");
+  if (!frameModeSelector) return;
+  document.querySelectorAll(".frame-option").forEach((button) => {
+    const active = button.dataset.frameMode === frameModeSelector.value;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+}
+
 function syncProfile() {
   const model = document.getElementById("modelSelector");
   const duration = document.getElementById("omniDurationSelector");
@@ -85,6 +95,21 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  const frameModeSelector = document.getElementById("frameModeSelector");
+  document.querySelectorAll(".frame-option").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (
+        !frameModeSelector ||
+        frameModeSelector.value === button.dataset.frameMode
+      ) {
+        return;
+      }
+      frameModeSelector.value = button.dataset.frameMode;
+      frameModeSelector.dispatchEvent(new Event("change", { bubbles: true }));
+      syncFrameButtons();
+    });
+  });
+
   document.querySelectorAll(".tab-button").forEach((button) => {
     button.addEventListener("click", () => {
       syncTabAccessibility(button.dataset.tab);
@@ -112,21 +137,25 @@ document.addEventListener("DOMContentLoaded", () => {
     "repeatCountInput",
     "downloadSaveModeSelector",
     "jobDownloadFolderInput",
+    "frameModeSelector",
   ].forEach((id) => {
     const control = document.getElementById(id);
     control?.addEventListener("change", () => {
       syncModeButtons();
+      syncFrameButtons();
       syncProfile();
     });
     control?.addEventListener("input", syncProfile);
   });
 
-  syncModeButtons();
-  syncProfile();
-  setTimeout(() => {
+  const syncAll = () => {
     syncModeButtons();
+    syncFrameButtons();
     syncProfile();
-  }, 250);
+  };
+  syncAll();
+  // loadSettings resolves asynchronously; re-sync once it has written values.
+  setTimeout(syncAll, 250);
 
   chrome.storage?.onChanged?.addListener(() => {
     setTimeout(syncProfile, 0);

@@ -102,6 +102,23 @@
           <input type="file" id="fileInput" accept=".txt" hidden>
 
           <div id="imageModeContainer">
+            <div id="frameModeContainer">
+              <section id="frameModeSwitch" class="mode-switch mode-switch-triple"
+                aria-label="Kiểu khung hình">
+                <button class="frame-option" data-frame-mode="single" type="button"
+                  data-lang-key="frame_mode_single">Ảnh đầu</button>
+                <button class="frame-option" data-frame-mode="chained" type="button"
+                  data-lang-key="frame_mode_chained">Nối tiếp</button>
+                <button class="frame-option" data-frame-mode="discrete" type="button"
+                  data-lang-key="frame_mode_discrete">Từng cặp</button>
+                <select id="frameModeSelector" class="visually-hidden" tabindex="-1" aria-hidden="true">
+                  <option value="single">single</option>
+                  <option value="chained">chained</option>
+                  <option value="discrete">discrete</option>
+                </select>
+              </section>
+              <p id="frameModeHint" class="frame-mode-hint"></p>
+            </div>
             <div class="image-tools">
               <button id="uploadImageButton" class="button button-orange" type="button">
                 <span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span>
