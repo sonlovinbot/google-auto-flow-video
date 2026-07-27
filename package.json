@@ -1,0 +1,9 @@
+{
+  "name": "coachio-video-flow",
+  "version": "8.4.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

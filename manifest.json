@@ -1,0 +1,24 @@
+{
+  "action": {
+    "default_title": "Open Coachio Video Flow"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "description": "Automate bulk video creation workflows on Google Flow AI (Veo).",
+  "host_permissions": ["https://labs.google/*"],
+  "manifest_version": 3,
+  "name": "Coachio Video Flow",
+  "permissions": [
+    "sidePanel",
+    "activeTab",
+    "scripting",
+    "storage",
+    "tabs",
+    "downloads"
+  ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "version": "8.4.2"
+}

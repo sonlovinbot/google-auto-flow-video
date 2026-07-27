@@ -1,0 +1,1094 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Coachio Video Flow Preview</title>
+  <style>
+    :root {
+      --orange: #f67d1c;
+      --orange-dark: #a34708;
+      --blue: #2563eb;
+      --ink: #000;
+      --paper: #fffdf7;
+      --muted: #eee9df;
+      --green: #177245;
+      --red: #c42424;
+      --line: #1f1f1f;
+      --line-soft: #aaa297;
+      --shadow: 3px 3px 0 rgba(0, 0, 0, .78);
+      --border: 2px solid var(--line);
+      --control-border: 1px solid var(--line);
+      --divider: 1px solid var(--line-soft);
+      --display: "VT323", "Courier New", monospace;
+      --body: "IBM Plex Sans", "Arial Narrow", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-width: 320px;
+      margin: 0;
+      color: var(--ink);
+      background: #d9d3c8;
+      font-family: var(--body);
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      border-radius: 0;
+      color: inherit;
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+      outline: 2px solid var(--blue);
+      outline-offset: 2px;
+    }
+
+    .app-shell {
+      width: min(100%, 1180px);
+      min-height: 100vh;
+      margin: 0 auto;
+      background: var(--paper);
+      border-inline: 1px solid var(--line);
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 16px;
+      min-height: 78px;
+      padding: 14px 18px;
+      color: white;
+      background: var(--ink);
+      border-bottom: 3px solid var(--orange);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 45px;
+      height: 45px;
+      place-items: center;
+      color: var(--ink);
+      background: var(--orange);
+      border: 2px solid white;
+      font-family: var(--display);
+      font-size: 27px;
+      font-weight: 900;
+    }
+
+    .brand h1,
+    .brand p {
+      margin: 0;
+    }
+
+    .brand h1 {
+      overflow: hidden;
+      font-family: var(--display);
+      font-size: clamp(22px, 3vw, 34px);
+      letter-spacing: .03em;
+      line-height: .9;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .brand p {
+      margin-top: 5px;
+      color: #f8c18f;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .04em;
+    }
+
+    .live-state {
+      padding: 9px 12px;
+      color: var(--ink);
+      background: #75dc9b;
+      border: 1px solid white;
+      font-family: var(--display);
+      font-size: 19px;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      background: var(--muted);
+      border-bottom: var(--control-border);
+    }
+
+    .tab {
+      min-height: 54px;
+      padding: 10px 8px;
+      background: transparent;
+      border: 0;
+      border-right: var(--control-border);
+      font-weight: 800;
+    }
+
+    .tab:last-child {
+      border-right: 0;
+    }
+
+    .tab[aria-selected="true"] {
+      background: var(--orange);
+      box-shadow: inset 0 -3px 0 var(--ink);
+    }
+
+    .panel {
+      display: none;
+      padding: 22px;
+    }
+
+    .panel.active {
+      display: block;
+    }
+
+    .workspace {
+      display: grid;
+      gap: 16px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 14px;
+      padding-bottom: 10px;
+      border-bottom: var(--divider);
+    }
+
+    .section-head h2,
+    .section-head p {
+      margin: 0;
+    }
+
+    .section-head h2 {
+      font-family: var(--display);
+      font-size: clamp(28px, 4vw, 46px);
+      line-height: .9;
+    }
+
+    .section-head p {
+      max-width: 360px;
+      color: #333;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .mode-switch {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      margin: 18px 0;
+      border: var(--border);
+      box-shadow: 2px 2px 0 rgba(0, 0, 0, .72);
+    }
+
+    .mode-switch button {
+      min-height: 46px;
+      background: white;
+      border: 0;
+      font-weight: 900;
+    }
+
+    .mode-switch button + button {
+      border-left: var(--control-border);
+    }
+
+    .mode-switch .active {
+      color: white;
+      background: var(--blue);
+    }
+
+    .run-profile {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 16px;
+      padding: 13px;
+      background: #ffe0bd;
+      border: var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .profile-label {
+      margin-bottom: 7px;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+
+    .profile-tokens {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+
+    .profile-token {
+      padding: 5px 8px;
+      background: white;
+      border: var(--control-border);
+      font-family: var(--display);
+      font-size: 17px;
+      font-weight: 900;
+    }
+
+    .profile-note {
+      margin: 8px 0 0;
+      color: #333;
+      font-size: 12px;
+    }
+
+    .quick-overrides {
+      display: none;
+      grid-column: 1 / -1;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      padding-top: 13px;
+      border-top: var(--divider);
+    }
+
+    .quick-overrides.open {
+      display: grid;
+    }
+
+    .bulk-tools {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .bulk-tools textarea {
+      min-height: 76px;
+      padding: 10px;
+      border: var(--control-border);
+      resize: vertical;
+    }
+
+    .button {
+      min-height: 44px;
+      padding: 8px 13px;
+      background: white;
+      border: var(--control-border);
+      font-weight: 900;
+      box-shadow: 2px 2px 0 rgba(0, 0, 0, .76);
+    }
+
+    .button:hover,
+    .button:focus-visible {
+      transform: translate(-1px, -1px);
+      box-shadow: 3px 3px 0 rgba(0, 0, 0, .8);
+    }
+
+    .button:active {
+      transform: translate(2px, 2px);
+      box-shadow: 1px 1px 0 var(--ink);
+    }
+
+    .button.primary {
+      color: white;
+      background: var(--blue);
+    }
+
+    .button.orange {
+      background: var(--orange);
+    }
+
+    .button.danger {
+      color: white;
+      background: var(--red);
+    }
+
+    .pairs {
+      display: grid;
+      gap: 12px;
+    }
+
+    .pair-row {
+      display: grid;
+      grid-template-columns: 42px 116px minmax(0, 1fr) 36px;
+      gap: 10px;
+      align-items: stretch;
+      padding: 10px;
+      background: white;
+      border: var(--control-border);
+    }
+
+    .pair-index {
+      display: grid;
+      place-items: center;
+      font-family: var(--display);
+      font-size: 24px;
+      font-weight: 900;
+      background: var(--orange);
+      border: 0;
+    }
+
+    .image-picker {
+      position: relative;
+      width: 116px;
+      min-height: 104px;
+      padding: 0;
+      overflow: hidden;
+      background: var(--muted);
+      border: var(--control-border);
+    }
+
+    .thumb {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .replace-image {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      padding: 6px 5px;
+      color: white;
+      background: rgba(0, 0, 0, .84);
+      font-size: 11px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .image-picker:hover .replace-image,
+    .image-picker:focus-visible .replace-image {
+      color: var(--ink);
+      background: var(--orange);
+    }
+
+    .pair-copy {
+      display: grid;
+      gap: 7px;
+    }
+
+    .filename {
+      overflow: hidden;
+      font-family: var(--display);
+      font-size: 19px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .pair-copy textarea {
+      width: 100%;
+      min-height: 64px;
+      padding: 8px;
+      border: var(--control-border);
+      resize: vertical;
+    }
+
+    .remove-pair {
+      align-self: start;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      color: white;
+      background: var(--red);
+      border: 0;
+      font-weight: 900;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 13px;
+    }
+
+    .field label {
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      min-height: 46px;
+      padding: 8px 10px;
+      background: white;
+      border: var(--control-border);
+      font-weight: 700;
+    }
+
+    .field-hint {
+      margin: -5px 0 13px;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .job-summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border: var(--control-border);
+      background: white;
+    }
+
+    .metric {
+      padding: 8px;
+      text-align: center;
+      border-right: var(--control-border);
+    }
+
+    .metric:last-child {
+      border-right: 0;
+    }
+
+    .metric strong {
+      display: block;
+      font-family: var(--display);
+      font-size: 24px;
+    }
+
+    .metric span {
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .action-bar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: var(--divider);
+    }
+
+    .table-wrap,
+    .monitor-card,
+    .log-box,
+    .settings-sheet {
+      margin-top: 18px;
+      background: white;
+      border: var(--control-border);
+      box-shadow: var(--shadow);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: var(--divider);
+    }
+
+    th {
+      color: white;
+      background: var(--ink);
+      font-family: var(--display);
+      font-size: 19px;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 5px 7px;
+      border: var(--control-border);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .status.waiting {
+      background: #ffe16b;
+    }
+
+    .status.ready {
+      background: #75dc9b;
+    }
+
+    .monitor-card {
+      padding: 16px;
+      background: #fff4cf;
+    }
+
+    .monitor-top {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .monitor-top h3,
+    .monitor-top p {
+      margin: 0;
+    }
+
+    .monitor-top h3 {
+      font-family: var(--display);
+      font-size: 27px;
+    }
+
+    .monitor-top p {
+      margin-top: 4px;
+      color: #333;
+      font-size: 13px;
+    }
+
+    .deadline {
+      padding: 7px 9px;
+      color: white;
+      background: var(--ink);
+      font-family: var(--display);
+      font-size: 18px;
+    }
+
+    .progress-track {
+      height: 20px;
+      margin: 16px 0;
+      background: white;
+      border: var(--control-border);
+    }
+
+    .progress-fill {
+      width: 37%;
+      height: 100%;
+      background: var(--orange);
+    }
+
+    .heartbeat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border: var(--control-border);
+      background: white;
+    }
+
+    .heartbeat-item {
+      padding: 9px;
+      border-right: var(--divider);
+    }
+
+    .heartbeat-item:last-child {
+      border-right: 0;
+    }
+
+    .heartbeat-item strong {
+      display: block;
+      font-family: var(--display);
+      font-size: 21px;
+    }
+
+    .heartbeat-item span {
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .log-box {
+      min-height: 400px;
+      padding: 16px;
+      color: #e9f7ee;
+      background: #07170e;
+      font-family: var(--display);
+      font-size: 18px;
+      line-height: 1.45;
+      border: 0;
+      box-shadow: none;
+    }
+
+    .log-box p {
+      margin: 0 0 9px;
+    }
+
+    .log-warn {
+      color: #ffe16b;
+    }
+
+    .log-ok {
+      color: #75dc9b;
+    }
+
+    .settings-sheet {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      padding: 18px;
+    }
+
+    .settings-sheet h3 {
+      grid-column: 1 / -1;
+      margin: 0;
+      font-family: var(--display);
+      font-size: 30px;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 760px) {
+      .app-shell {
+        border-inline: 0;
+      }
+
+      .topbar {
+        grid-template-columns: 1fr;
+      }
+
+      .live-state {
+        justify-self: start;
+      }
+
+      .tabs {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .tab:nth-child(2) {
+        border-right: 0;
+      }
+
+      .tab:nth-child(-n+2) {
+        border-bottom: var(--control-border);
+      }
+
+      .panel {
+        padding: 14px;
+      }
+
+      .settings-sheet {
+        grid-template-columns: 1fr;
+      }
+
+      .section-head {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .bulk-tools {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .bulk-tools textarea {
+        grid-column: 1 / -1;
+      }
+
+      .pair-row {
+        grid-template-columns: 32px 82px minmax(0, 1fr);
+      }
+
+      .image-picker {
+        width: 82px;
+        height: 82px;
+      }
+
+      .remove-pair {
+        grid-column: 3;
+        justify-self: end;
+      }
+
+      .run-profile,
+      .monitor-top {
+        grid-template-columns: 1fr;
+      }
+
+      .quick-overrides,
+      .heartbeat-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .heartbeat-item:nth-child(2) {
+        border-right: 0;
+      }
+
+      .heartbeat-item:nth-child(-n+2) {
+        border-bottom: var(--divider);
+      }
+
+      .action-bar {
+        flex-direction: column-reverse;
+      }
+
+      .action-bar .button {
+        width: 100%;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .button {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">CF</div>
+        <div>
+          <h1>COACHIO VIDEO FLOW</h1>
+        </div>
+      </div>
+      <div class="live-state">Sẵn sàng chạy</div>
+    </header>
+
+    <nav class="tabs" aria-label="Khu vực làm việc">
+      <button class="tab" data-panel="create" aria-selected="true">Tạo tác vụ</button>
+      <button class="tab" data-panel="queue" aria-selected="false">Hàng chờ <span id="queueCount">3</span></button>
+      <button class="tab" data-panel="logs" aria-selected="false">Nhật ký</button>
+      <button class="tab" data-panel="settings" aria-selected="false">Cài đặt</button>
+    </nav>
+
+    <section class="panel active" id="panel-create">
+      <div class="workspace">
+        <div class="section-head">
+          <h2>TẠO TÁC VỤ</h2>
+          <p>Thiết lập mặc định được lấy từ tab Cài đặt. Ở đây chỉ cần nạp nội dung và chỉnh ngoại lệ khi thật sự cần.</p>
+        </div>
+
+        <div class="mode-switch" aria-label="Chế độ tạo">
+          <button type="button">Text to Video</button>
+          <button type="button" class="active">Image to Video</button>
+        </div>
+
+        <section class="run-profile" aria-label="Cấu hình đang áp dụng">
+          <div>
+            <div class="profile-label">Đang dùng thiết lập mặc định</div>
+            <div class="profile-tokens">
+              <span class="profile-token">OMNI FLASH</span>
+              <span class="profile-token">4 GIÂY</span>
+              <span class="profile-token">9:16</span>
+              <span class="profile-token">1 VIDEO / LINE</span>
+              <span class="profile-token">TỰ ĐỘNG LƯU</span>
+            </div>
+            <p class="profile-note">Thư mục kế tiếp: <strong>Flow-06</strong> · Theo dõi tối đa 8 phút.</p>
+          </div>
+          <button class="button" id="toggleOverrides" type="button" aria-expanded="false">Chỉnh tác vụ này</button>
+
+          <div class="quick-overrides" id="quickOverrides">
+            <div class="field">
+              <label for="jobModel">Model</label>
+              <select id="jobModel"><option>Giữ mặc định</option><option>Veo 3.1 Fast</option></select>
+            </div>
+            <div class="field">
+              <label for="jobDuration">Thời lượng</label>
+              <select id="jobDuration"><option>Giữ mặc định · 4s</option><option>6 giây</option></select>
+            </div>
+            <div class="field">
+              <label for="jobRatio">Tỷ lệ</label>
+              <select id="jobRatio"><option>Giữ mặc định · 9:16</option><option>16:9</option></select>
+            </div>
+            <div class="field">
+              <label for="jobOutput">Số lượng</label>
+              <select id="jobOutput"><option>Giữ mặc định · 1</option><option>2</option><option>3</option><option>4</option></select>
+            </div>
+          </div>
+        </section>
+
+        <div class="section-head">
+          <h2>ẢNH × PROMPT</h2>
+          <p>Click trực tiếp lên ảnh ở bất kỳ line nào để thay riêng ảnh đó mà không làm mất prompt đã sửa.</p>
+        </div>
+
+        <div class="bulk-tools">
+          <textarea id="bulkPrompts" aria-label="Nhập prompt hàng loạt" placeholder="Dán prompt hàng loạt, cách nhau bằng một dòng trống"></textarea>
+          <button class="button" id="applyPrompts" type="button">Ghép prompt</button>
+          <button class="button orange" id="chooseImages" type="button">Nạp nhiều ảnh</button>
+          <input id="imageInputPreview" type="file" accept="image/*" multiple hidden>
+        </div>
+
+        <div class="pairs" id="pairList"></div>
+      </div>
+
+      <div class="action-bar">
+        <div class="job-summary" aria-label="Tóm tắt tác vụ">
+          <div class="metric"><strong id="pairCount">3</strong><span>Line</span></div>
+          <div class="metric"><strong>3</strong><span>Video dự kiến</span></div>
+          <div class="metric"><strong>Flow-06</strong><span>Thư mục</span></div>
+        </div>
+        <button class="button primary" type="button">Thêm vào hàng chờ →</button>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-queue">
+      <div class="section-head">
+        <h2>HÀNG CHỜ</h2>
+        <p>Heartbeat hiển thị liên tục. Tác vụ chỉ hoàn tất sau khi Chrome xác minh file đã tải xong.</p>
+      </div>
+      <section class="monitor-card" aria-label="Theo dõi tác vụ đang chạy">
+        <div class="monitor-top">
+          <div>
+            <h3>JOB 2/2 · ĐANG XÁC MINH KẾT QUẢ</h3>
+            <p>Video mới đã xuất hiện trong Flow. Hệ thống đang tải file 2/3 và kiểm tra trạng thái Chrome Downloads.</p>
+          </div>
+          <div class="deadline">02:58 / 08:00</div>
+        </div>
+        <div class="progress-track" aria-label="Tiến độ 37%">
+          <div class="progress-fill"></div>
+        </div>
+        <div class="heartbeat-grid">
+          <div class="heartbeat-item"><strong>89</strong><span>Lần quét DOM</span></div>
+          <div class="heartbeat-item"><strong>22:49:20</strong><span>Heartbeat cuối</span></div>
+          <div class="heartbeat-item"><strong>1 / 3</strong><span>File xác minh xong</span></div>
+          <div class="heartbeat-item"><strong>0</strong><span>Lỗi tải</span></div>
+        </div>
+      </section>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Tác vụ</th><th>Cấu hình</th><th>Thư mục</th><th>Trạng thái</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>3 line ảnh</td><td>Omni, 4s, 9:16</td><td>Flow-06</td><td><span class="status waiting">Tải 1/3 · 02:58</span></td></tr>
+            <tr><td>1 prompt chữ</td><td>Veo Fast, 16:9</td><td>Flow-05</td><td><span class="status ready">Đã tải đủ</span></td></tr>
+            <tr><td>2 line ảnh</td><td>Omni, 6s, 9:16</td><td>Flow-04</td><td><span class="status ready">Sẵn sàng</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-logs">
+      <div class="section-head">
+        <h2>NHẬT KÝ</h2>
+        <p>Log tập trung vào bước thao tác, thời gian chờ, DOM quan sát được và kết quả tải.</p>
+      </div>
+      <div class="log-box">
+        <p>[22:46:17] Đã gửi line 1. Theo dõi kết quả tối đa 8 phút.</p>
+        <p class="log-warn">[22:47:22] Heartbeat #30 · video=5 · ready=4 · download=0.</p>
+        <p>[22:48:24] Phát hiện media.getMediaUrlRedirect?name=eb3e2ba0…</p>
+        <p>[22:48:24] Chrome đã nhận lệnh tải Flow-06/1.a.20260727_224824.mp4 · ID 941.</p>
+        <p class="log-ok">[22:48:29] Đã xác minh tải xong · 4.8 MB · tác vụ 1/1 hoàn tất.</p>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-settings">
+      <div class="section-head">
+        <h2>CÀI ĐẶT</h2>
+        <p>Các tuỳ chọn mặc định ít thay đổi được gom riêng khỏi màn hình tạo tác vụ.</p>
+      </div>
+      <div class="settings-sheet">
+        <h3>THIẾT LẬP MẶC ĐỊNH</h3>
+        <div class="field">
+          <label for="defaultMode">Chế độ mặc định</label>
+          <select id="defaultMode"><option>Image to Video</option><option>Text to Video</option></select>
+        </div>
+        <div class="field">
+          <label for="defaultModel">Model mặc định</label>
+          <select id="defaultModel">
+            <option value="omni">Omni Flash</option>
+            <option value="lite">Veo 3.1 Lite</option>
+            <option value="fast">Veo 3.1 Fast</option>
+            <option value="quality">Veo 3.1 Quality</option>
+          </select>
+        </div>
+        <div class="field" id="defaultDurationField">
+          <label for="defaultDuration">Thời lượng Omni Flash</label>
+          <select id="defaultDuration"><option>4 giây</option><option>6 giây</option></select>
+        </div>
+        <div class="field">
+          <label for="defaultRatio">Tỷ lệ mặc định</label>
+          <select id="defaultRatio"><option>9:16 dọc</option><option>16:9 ngang</option></select>
+        </div>
+        <div class="field">
+          <label for="defaultOutput">Số video mỗi line</label>
+          <select id="defaultOutput"><option>1</option><option>2</option><option>3</option><option>4</option></select>
+        </div>
+        <div class="field">
+          <label for="scanTimeout">Thời gian theo dõi tối đa</label>
+          <select id="scanTimeout"><option>8 phút</option><option>10 phút</option><option>12 phút</option></select>
+        </div>
+        <div class="field">
+          <label for="savePolicy">Cách lưu mặc định</label>
+          <select id="savePolicy"><option>Tự động vào thư mục tác vụ</option><option>Hỏi vị trí lưu</option></select>
+        </div>
+        <div class="field">
+          <label for="folderPattern">Tên thư mục tác vụ</label>
+          <input id="folderPattern" value="Flow-{số thứ tự}">
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const initialPairs = [
+      {
+        name: "1.png",
+        src: "../project/1.png",
+        prompt: "Máy quay chậm tiến nhẹ, giữ bố cục giấy cắt và chuyển động nhân vật tinh tế."
+      },
+      {
+        name: "2.png",
+        src: "../project/2.png",
+        prompt: "Giữ camera khoá, bàn tay đóng gói sản phẩm và máy in nhãn hoạt động tự nhiên."
+      },
+      {
+        name: "3.png",
+        src: "../project/3.png",
+        prompt: "Tạo chuyển động parallax nhẹ giữa các lớp giấy, không làm thay đổi khuôn mặt và logo."
+      }
+    ];
+
+    let pairs = initialPairs;
+    const pairList = document.getElementById("pairList");
+    const pairCount = document.getElementById("pairCount");
+
+    function renderPairs() {
+      pairList.innerHTML = "";
+      pairs.forEach((pair, index) => {
+        const row = document.createElement("article");
+        row.className = "pair-row";
+
+        const number = document.createElement("div");
+        number.className = "pair-index";
+        number.textContent = String(index + 1).padStart(2, "0");
+
+        const imagePicker = document.createElement("button");
+        imagePicker.className = "image-picker";
+        imagePicker.type = "button";
+        imagePicker.setAttribute("aria-label", "Thay ảnh " + pair.name);
+
+        const image = document.createElement("img");
+        image.className = "thumb";
+        image.src = pair.src;
+        image.alt = pair.name;
+
+        const replaceLabel = document.createElement("span");
+        replaceLabel.className = "replace-image";
+        replaceLabel.textContent = "CLICK ĐỂ THAY ẢNH";
+
+        const replacementInput = document.createElement("input");
+        replacementInput.type = "file";
+        replacementInput.accept = "image/*";
+        replacementInput.hidden = true;
+        imagePicker.addEventListener("click", () => replacementInput.click());
+        replacementInput.addEventListener("change", () => {
+          const file = replacementInput.files[0];
+          if (!file) return;
+          if (pair.src.startsWith("blob:")) URL.revokeObjectURL(pair.src);
+          pair.name = file.name;
+          pair.src = URL.createObjectURL(file);
+          renderPairs();
+        });
+        imagePicker.append(image, replaceLabel);
+
+        const copy = document.createElement("div");
+        copy.className = "pair-copy";
+        const filename = document.createElement("div");
+        filename.className = "filename";
+        filename.textContent = pair.name;
+        const prompt = document.createElement("textarea");
+        prompt.value = pair.prompt;
+        prompt.setAttribute("aria-label", "Prompt cho " + pair.name);
+        prompt.addEventListener("input", () => {
+          pair.prompt = prompt.value;
+        });
+        copy.append(filename, prompt);
+
+        const remove = document.createElement("button");
+        remove.className = "remove-pair";
+        remove.type = "button";
+        remove.textContent = "X";
+        remove.setAttribute("aria-label", "Xoá " + pair.name);
+        remove.addEventListener("click", () => {
+          pairs = pairs.filter((candidate) => candidate !== pair);
+          renderPairs();
+        });
+
+        row.append(number, imagePicker, copy, remove, replacementInput);
+        pairList.appendChild(row);
+      });
+      pairCount.textContent = pairs.length;
+    }
+
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach((candidate) => {
+          candidate.setAttribute("aria-selected", "false");
+        });
+        document.querySelectorAll(".panel").forEach((panel) => {
+          panel.classList.remove("active");
+        });
+        tab.setAttribute("aria-selected", "true");
+        document.getElementById("panel-" + tab.dataset.panel).classList.add("active");
+      });
+    });
+
+    document.getElementById("defaultModel").addEventListener("change", (event) => {
+      document.getElementById("defaultDurationField").style.display =
+        event.target.value === "omni" ? "grid" : "none";
+    });
+
+    document.getElementById("toggleOverrides").addEventListener("click", (event) => {
+      const overrides = document.getElementById("quickOverrides");
+      const isOpen = overrides.classList.toggle("open");
+      event.currentTarget.setAttribute("aria-expanded", String(isOpen));
+      event.currentTarget.textContent = isOpen ? "Đóng chỉnh riêng" : "Chỉnh tác vụ này";
+    });
+
+    document.getElementById("applyPrompts").addEventListener("click", () => {
+      const values = document.getElementById("bulkPrompts").value
+        .split(/\n\s*\n/)
+        .map((value) => value.trim())
+        .filter(Boolean);
+      if (values.length === 1) {
+        pairs.forEach((pair) => {
+          pair.prompt = values[0];
+        });
+      } else {
+        pairs.forEach((pair, index) => {
+          pair.prompt = values[index] || "";
+        });
+      }
+      renderPairs();
+    });
+
+    const imageInput = document.getElementById("imageInputPreview");
+    document.getElementById("chooseImages").addEventListener("click", () => imageInput.click());
+    imageInput.addEventListener("change", () => {
+      const prompt = pairs.length === 1 ? pairs[0].prompt : "";
+      pairs = Array.from(imageInput.files).map((file) => ({
+        name: file.name,
+        src: URL.createObjectURL(file),
+        prompt
+      }));
+      renderPairs();
+    });
+
+    renderPairs();
+  </script>
+</body>
+</html>

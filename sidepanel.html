@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Coachio Video Flow</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,500,0,0">
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <section id="wrong-page-interface" aria-live="polite">
+    <div class="wrong-page-mark material-symbols-outlined" aria-hidden="true">wrong_location</div>
+    <h1>Chưa mở Google Flow</h1>
+    <p id="wrong-page-message" data-lang-key="wrong_page_message">
+      Tool chỉ chạy trên trang Google Flow.<br>Vui lòng điều hướng đến trang project.
+    </p>
+    <button id="navigateToFlowButton" class="button button-primary" type="button">
+      <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>
+      <span data-lang-key="go_to_flow">Chuyển đến Flow</span>
+    </button>
+  </section>
+
+  <main id="main-interface" class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">CF</div>
+        <div class="brand-copy">
+          <h1>COACHIO VIDEO FLOW</h1>
+          <p>Coachio Academy</p>
+        </div>
+      </div>
+      <div id="liveStatus" class="live-state" data-lang-key="status_ready">Sẵn sàng</div>
+    </header>
+
+    <nav class="tabs" aria-label="Khu vực làm việc">
+      <button class="tab-button active" data-tab="control" aria-selected="true" type="button">
+        <span class="material-symbols-outlined" aria-hidden="true">add_circle</span>
+        <span>Tạo tác vụ</span>
+      </button>
+      <button class="tab-button" data-tab="queue" aria-selected="false" type="button">
+        <span class="material-symbols-outlined" aria-hidden="true">format_list_bulleted</span>
+        <span>Hàng chờ</span>
+        <span id="queueTaskCount" class="tab-count">0</span>
+      </button>
+      <button class="tab-button" data-tab="history" aria-selected="false" type="button">
+        <span class="material-symbols-outlined" aria-hidden="true">terminal</span>
+        <span data-lang-key="tab_history">Nhật ký</span>
+      </button>
+      <button class="tab-button" data-tab="settings" aria-selected="false" type="button">
+        <span class="material-symbols-outlined" aria-hidden="true">tune</span>
+        <span data-lang-key="tab_settings">Cài đặt</span>
+      </button>
+    </nav>
+
+    <div class="tab-content">
+      <section id="content-control" class="tab-pane active">
+        <div class="section-head">
+          <div>
+            <h2>TẠO TÁC VỤ</h2>
+            <p>Nạp nội dung ở đây. Cấu hình mặc định được quản lý riêng trong tab Cài đặt.</p>
+          </div>
+        </div>
+
+        <section id="modeSelectionContainer" class="mode-switch" aria-label="Chế độ tạo video">
+          <button class="mode-option" data-mode="text-to-video" type="button">Text to Video</button>
+          <button class="mode-option" data-mode="image-to-video" type="button">Image to Video</button>
+          <select id="modeSelector" class="visually-hidden" tabindex="-1" aria-hidden="true">
+            <option value="text-to-video" data-lang-key="mode_text">Text-to-Video</option>
+            <option value="image-to-video" data-lang-key="mode_image">Image-to-Video</option>
+          </select>
+        </section>
+
+        <section class="run-profile" aria-label="Thiết lập đang áp dụng">
+          <div class="profile-copy">
+            <span class="profile-label">Đang dùng thiết lập mặc định</span>
+            <div class="profile-tokens">
+              <strong id="profileModel">OMNI FLASH</strong>
+              <strong id="profileDuration">4 GIÂY</strong>
+              <strong id="profileRatio">9:16</strong>
+              <strong id="profileOutput">1 VIDEO / LINE</strong>
+              <strong id="profileSave">TỰ ĐỘNG LƯU</strong>
+            </div>
+            <p>Thư mục kế tiếp: <b id="profileFolder">Flow-01</b></p>
+          </div>
+          <button class="button button-quiet jump-to-settings" type="button">
+            <span class="material-symbols-outlined" aria-hidden="true">tune</span>
+            Chỉnh mặc định
+          </button>
+        </section>
+
+        <section id="promptContainer" class="content-sheet">
+          <div class="section-head compact">
+            <div>
+              <h2 id="promptListTitle" data-lang-key="prompt_list">NỘI DUNG</h2>
+              <p>Mỗi prompt cách nhau bằng một dòng trống.</p>
+            </div>
+            <button id="uploadPromptButton" class="button button-quiet" type="button">
+              <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
+              <span data-lang-key="import_from_file">Nhập TXT</span>
+            </button>
+          </div>
+          <input type="file" id="fileInput" accept=".txt" hidden>
+
+          <div id="imageModeContainer">
+            <div class="image-tools">
+              <button id="uploadImageButton" class="button button-orange" type="button">
+                <span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span>
+                <span data-lang-key="select_images_button">Nạp nhiều ảnh</span>
+              </button>
+              <select id="imageSortSelector" data-lang-title="sort_order_label" aria-label="Sắp xếp ảnh">
+                <option value="az" data-lang-key="sort_az">A-Z</option>
+                <option value="za" data-lang-key="sort_za">Z-A</option>
+                <option value="newest" data-lang-key="sort_newest">Mới nhất</option>
+                <option value="oldest" data-lang-key="sort_oldest">Cũ nhất</option>
+              </select>
+              <input type="file" id="imageInput" accept="image/*" multiple hidden>
+              <p id="imageFileSummary">
+                <span data-lang-key="images_selected">Đã chọn:</span>
+                <strong id="imageCount">0</strong>
+              </p>
+            </div>
+          </div>
+
+          <label class="field-label" for="prompts">Prompt hàng loạt</label>
+          <textarea id="prompts" rows="6" data-lang-placeholder="prompt_placeholder"
+            placeholder="Dán prompt hàng loạt, cách nhau bằng một dòng trống"></textarea>
+
+          <div id="imagePromptPairs" aria-live="polite"></div>
+        </section>
+
+        <section class="job-footer">
+          <label for="jobDownloadFolderInput" data-lang-key="job_folder_label">Thư mục lưu tác vụ</label>
+          <div class="job-folder-row">
+            <input type="text" id="jobDownloadFolderInput" value="Flow Downloads">
+            <button id="addToQueueButton" class="button button-primary" type="button">
+              <span class="material-symbols-outlined" aria-hidden="true">add_to_queue</span>
+              <span data-lang-key="add_to_queue_button">Thêm vào hàng chờ</span>
+            </button>
+          </div>
+
+          <div class="queue-controls">
+            <button id="openQueueButton" class="button button-quiet" type="button">
+              <span class="material-symbols-outlined" aria-hidden="true">format_list_bulleted</span>
+              <span data-lang-key="manage_queue_button">Xem hàng chờ</span>
+            </button>
+            <button id="clearQueueButton" class="button button-danger" type="button"
+              data-lang-title="clear_queue_button_title">
+              <span class="material-symbols-outlined" aria-hidden="true">delete_sweep</span>
+              Xóa hàng chờ
+            </button>
+          </div>
+
+          <div class="status-area">
+            <progress id="progressBar" value="0" max="100" aria-label="Tiến độ tác vụ"></progress>
+          </div>
+
+          <div class="action-controls">
+            <div id="startControlContainer">
+              <button id="mainActionButton" class="button button-primary" type="button"
+                data-lang-title="start_button_title">
+                <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span>
+                <span data-lang-key="start_button">Bắt đầu hàng chờ</span>
+              </button>
+              <button id="startNewProjectButton" class="button button-orange" type="button"
+                data-lang-key="start_new_project">Tạo project mới</button>
+              <button id="startCurrentProjectButton" class="button button-quiet" type="button"
+                data-lang-key="start_current_project">Chạy tại project này</button>
+            </div>
+            <button id="stopButton" class="button button-danger" type="button"
+              data-lang-title="stop_button_title" disabled>
+              <span class="material-symbols-outlined" aria-hidden="true">stop</span>
+              <span data-lang-key="stop_button">Dừng</span>
+            </button>
+          </div>
+        </section>
+      </section>
+
+      <section id="queueModalOverlay" class="tab-pane queue-pane">
+        <div class="queue-modal-content">
+          <div class="section-head">
+            <div>
+              <h2>HÀNG CHỜ</h2>
+              <p>Theo dõi trạng thái tạo và tải video theo từng tác vụ.</p>
+            </div>
+            <button id="closeQueueModal" class="button button-quiet" type="button">
+              <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+              Quay lại
+            </button>
+          </div>
+
+          <div id="queue-list-display" class="queue-table-wrap">
+            <table id="queueTable">
+              <thead>
+                <tr>
+                  <th data-lang-key="queue_header_index">#</th>
+                  <th data-lang-key="queue_header_desc">Tác vụ</th>
+                  <th data-lang-key="queue_header_folder">Thư mục</th>
+                  <th data-lang-key="queue_header_progress">Trạng thái</th>
+                  <th data-lang-key="queue_header_actions">Xử lý</th>
+                </tr>
+              </thead>
+              <tbody id="queueTableBody"></tbody>
+            </table>
+            <div class="queue-list-empty-message">
+              <span class="material-symbols-outlined" aria-hidden="true">inbox</span>
+              <p data-lang-key="queue_empty_message">Chưa có tác vụ. Hãy thêm từ tab Tạo tác vụ.</p>
+            </div>
+          </div>
+
+          <div class="queue-modal-footer">
+            <button id="queueResetAllButton" class="button button-quiet" type="button">
+              <span class="material-symbols-outlined" aria-hidden="true">restart_alt</span>
+              <span data-lang-key="queue_reset_all_button">Reset toàn bộ</span>
+            </button>
+            <button id="queueDeleteAllButton" class="button button-danger" type="button">
+              <span class="material-symbols-outlined" aria-hidden="true">delete_sweep</span>
+              <span data-lang-key="queue_delete_all_button">Xóa toàn bộ</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="content-history" class="tab-pane">
+        <div class="section-head">
+          <div>
+            <h2>NHẬT KÝ</h2>
+            <p>Chi tiết từng bước thao tác, DOM và kết quả tải.</p>
+          </div>
+        </div>
+        <div id="logDisplay" aria-live="polite"></div>
+        <div class="failed-head">
+          <h3 id="failedSummary" data-lang-key="failed_prompts_summary">Tác vụ lỗi (0)</h3>
+        </div>
+        <div id="failedPromptsDisplay"></div>
+        <button id="copyFailedButton" class="button button-quiet full-width" type="button">
+          <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+          <span data-lang-key="copy_failed_button">Sao chép toàn bộ nhật ký và lỗi</span>
+        </button>
+      </section>
+
+      <section id="content-settings" class="tab-pane">
+        <div class="section-head">
+          <div>
+            <h2>CÀI ĐẶT</h2>
+            <p>Các giá trị này được dùng làm profile mặc định cho tác vụ mới.</p>
+          </div>
+        </div>
+
+        <div class="settings-grid">
+          <div class="settings-subheader" data-lang-key="subheader_general_settings">Thiết lập tạo mặc định</div>
+
+          <label for="repeatCountInput" data-lang-key="repeat_count_label">Số video mỗi line</label>
+          <select id="repeatCountInput">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+
+          <label for="modelSelector" data-lang-key="model_label">Model</label>
+          <select id="modelSelector">
+            <option value="omni_flash">Omni Flash</option>
+            <option value="veo3_lite">Veo 3.1 - Lite</option>
+            <option value="veo3_fast" data-lang-key="model_default">Veo 3.1 - Fast</option>
+            <option value="veo3_quality" data-lang-key="model_veo3_quality">Veo 3.1 - Quality</option>
+          </select>
+
+          <label for="omniDurationSelector" id="omniDurationLabel">Thời lượng Omni Flash</label>
+          <select id="omniDurationSelector">
+            <option value="4s">4 giây</option>
+            <option value="6s">6 giây</option>
+          </select>
+
+          <label for="aspectRatioSelector" data-lang-key="aspect_ratio_label">Tỷ lệ video</label>
+          <select id="aspectRatioSelector">
+            <option value="landscape" data-lang-key="aspect_ratio_landscape">16:9 ngang</option>
+            <option value="portrait" data-lang-key="aspect_ratio_portrait">9:16 dọc</option>
+          </select>
+
+          <label for="startFromInput" data-lang-key="start_from_label">Bắt đầu từ line</label>
+          <div class="control-group">
+            <input type="number" id="startFromInput" value="1" min="1" class="input-short">
+            <span class="unit" data-lang-key="unit_number">line</span>
+          </div>
+
+          <label data-lang-key="initial_wait_time_label">Nhịp gửi tác vụ</label>
+          <div class="control-group">
+            <input type="number" id="minInitialWaitTime" value="3" min="1" class="input-short">
+            <span data-lang-key="to_label">đến</span>
+            <input type="number" id="maxInitialWaitTime" value="6" min="1" class="input-short">
+            <span>giây</span>
+          </div>
+
+          <label for="languageSelector" data-lang-key="language_label">Ngôn ngữ</label>
+          <select id="languageSelector">
+            <option value="vi">Tiếng Việt</option>
+            <option value="en">English</option>
+            <option value="hi">India (Hindi)</option>
+            <option value="th">Thailand (Thai)</option>
+            <option value="ur">Pakistan (Urdu)</option>
+            <option value="bn">Bangladesh (Bengali)</option>
+            <option value="es">Spanish (Español)</option>
+          </select>
+
+          <div class="settings-subheader" data-lang-key="subheader_download_settings">Thiết lập tải xuống</div>
+
+          <label for="autoDownloadCheckbox" data-lang-key="auto_download_label">Tự động tải video</label>
+          <div class="control-group download-toggle">
+            <input type="checkbox" id="autoDownloadCheckbox">
+            <button type="button" id="openDownloadsSettingsLink" class="button button-quiet">
+              Mở cài đặt Chrome
+            </button>
+          </div>
+
+          <label for="downloadSaveModeSelector">Cách lưu video</label>
+          <select id="downloadSaveModeSelector">
+            <option value="auto">Tự động vào thư mục tác vụ</option>
+            <option value="ask">Hỏi vị trí lưu từng video</option>
+          </select>
+
+          <div class="hint-text">
+            Chế độ tự động lưu bên trong Downloads của Chrome. Chế độ hỏi sẽ mở một hộp thoại sau khi video sẵn sàng.
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div id="confirmClearQueueModal" class="confirm-modal-overlay">
+    <div class="confirm-modal-content" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+      <h2 id="confirm-modal-title" class="confirm-modal-title" data-lang-key="confirm_clear_queue_title">
+        Xác nhận xóa hàng chờ
+      </h2>
+      <p class="confirm-modal-message" data-lang-key="confirm_clear_queue_message">
+        Bạn có chắc muốn xóa toàn bộ hàng chờ và cache ảnh không? Hành động này không thể hoàn tác.
+      </p>
+      <div class="confirm-modal-actions">
+        <button id="cancelClearQueueButton" class="button button-quiet" type="button"
+          data-lang-key="confirm_button_cancel">Hủy</button>
+        <button id="confirmClearQueueButton" class="button button-danger" type="button"
+          data-lang-key="confirm_button_delete">Xóa</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="sidepanel.js"></script>
+  <script type="module" src="design-ui.js"></script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "targetFlowUI": "Slate prompt editor, Omni Flash + Veo 3.1 model menu (2026-07)",
+  "note": "Flow is a third-party UI that changes without notice. When automation stops finding a control, update the matching XPath here — or paste a patched copy of this object into chrome.storage.local under 'selectorOverride' to fix it without reinstalling the extension.",
+  "selectors": {
+    "PROMPT_TEXTAREA_ID": "div[contenteditable=\"true\"][data-slate-editor=\"true\"][role=\"textbox\"]",
+    "GENERATE_BUTTON_XPATH": "//button[not(@disabled) and @aria-disabled!='true' and (.//*[normalize-space(text())='arrow_forward'] or .//*[normalize-space(text())='Create'])]",
+    "NEW_PROJECT_BUTTON_XPATH": "//button[contains(normalize-space(.), 'New project') or contains(normalize-space(.), 'New Project')]",
+    "PROMPT_POLICY_ERROR_POPUP_XPATH": "//*[@data-sonner-toast and contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'policy')]",
+    "QUEUE_FULL_POPUP_XPATH": "//*[@data-sonner-toast and (contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'queue') or contains(normalize-space(.), '5'))]",
+    "START_IMAGE_ADD_BUTTON_XPATH": "//*[normalize-space(text())='Start' and not(*)]",
+    "HIDDEN_FILE_INPUT_XPATH": "//input[@type='file' and (contains(@accept, 'image') or not(@accept))]",
+    "UPLOAD_SPINNER_XPATH": "//*[contains(normalize-space(text()), '%') or normalize-space(text())='progress_activity']",
+    "IMAGE_POLICY_ERROR_POPUP_XPATH": "//*[@data-sonner-toast and contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'policy')]",
+    "SETTINGS_BUTTON_XPATH": "//button[contains(normalize-space(.), 'Video ·')]",
+    "MODEL_SELECTION_BUTTON_XPATH": "//button[contains(normalize-space(.), 'Omni Flash') or contains(normalize-space(.), 'Veo 3.1')]",
+    "MODEL_OMNI_FLASH_XPATH": "//*[@role='menuitem' and contains(normalize-space(.), 'Omni Flash')]",
+    "MODEL_VEO_3_LITE_XPATH": "//*[@role='menuitem' and contains(normalize-space(.), 'Veo 3.1 - Lite')]",
+    "MODEL_VEO_3_FAST_XPATH": "//*[@role='menuitem' and contains(normalize-space(.), 'Veo 3.1 - Fast')]",
+    "MODEL_VEO_3_QUALITY_XPATH": "//*[@role='menuitem' and contains(normalize-space(.), 'Veo 3.1 - Quality')]",
+    "RESULT_CONTAINER_XPATH": "//*[self::button or self::a][.//video[starts-with(@src, 'http')]]",
+    "PROMPT_IN_CONTAINER_XPATH": ".//*[self::p or self::span or self::div]",
+    "VIDEOS_IN_CONTAINER_XPATH": ".//video[starts-with(@src, 'http')]"
+  }
+}
