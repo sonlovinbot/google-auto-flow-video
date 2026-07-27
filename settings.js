@@ -1,6 +1,7 @@
 import { dom } from "./dom.js";
 import { state } from "./state.js";
 import { updateModelSpecificSettings } from "./ui.js";
+import { normalizeFrameMode } from "./prompt-parser.js";
 
 const SUPPORTED_MODELS = new Set([
   "omni_flash",
@@ -8,6 +9,40 @@ const SUPPORTED_MODELS = new Set([
   "veo3_fast",
   "veo3_quality",
 ]);
+
+/**
+ * Bring one stored job up to the current shape. Every field is re-derived from
+ * a validated expression so a queue written by an older version keeps running:
+ * a job with no `frameMode` becomes "single", which is exactly today's
+ * one-image-per-video behaviour.
+ */
+export function normalizeJob(job, stored = {}) {
+  return {
+    ...job,
+    status: job.status === "downloading" ? "pending" : job.status,
+    repeatCount: job.repeatCount || stored.videoCount || "1",
+    model: SUPPORTED_MODELS.has(job.model) ? job.model : "omni_flash",
+    duration:
+      job.duration === "6s"
+        ? "6s"
+        : job.duration === "4s"
+          ? "4s"
+          : stored.omniDuration === "6s"
+            ? "6s"
+            : "4s",
+    aspectRatio: job.aspectRatio || stored.aspectRatio || "portrait",
+    downloadSaveMode:
+      job.downloadSaveMode === "ask"
+        ? "ask"
+        : job.downloadSaveMode === "auto"
+          ? "auto"
+          : stored.downloadSaveMode === "ask"
+            ? "ask"
+            : "auto",
+    frameMode: normalizeFrameMode(job.frameMode),
+    framePairs: Array.isArray(job.framePairs) ? job.framePairs : null,
+  };
+}
 
 export function loadSettings(onLoaded) {
   const detectedLanguage = chrome.i18n.getUILanguage().split("-")[0];
@@ -31,6 +66,7 @@ export function loadSettings(onLoaded) {
     omniDuration: "4s",
     lastRunMode: null,
     imageSort: "az",
+    frameMode: "single",
     masterQueue: [],
     nextProjectCounter: 1,
   };
@@ -62,33 +98,16 @@ export function loadSettings(onLoaded) {
     dom.omniDurationSelector.value =
       stored.omniDuration === "6s" ? "6s" : "4s";
     dom.imageSortSelector.value = stored.imageSort;
+    if (dom.frameModeSelector) {
+      dom.frameModeSelector.value = normalizeFrameMode(stored.frameMode);
+    }
 
     state.activeRunMode = stored.lastRunMode;
     state.currentLang = stored.language;
     state.currentMode = stored.mode;
-    state.masterQueue = (stored.masterQueue || []).map((job) => ({
-      ...job,
-      status: job.status === "downloading" ? "pending" : job.status,
-      repeatCount: job.repeatCount || stored.videoCount || "1",
-      model: SUPPORTED_MODELS.has(job.model) ? job.model : "omni_flash",
-      duration:
-        job.duration === "6s"
-          ? "6s"
-          : job.duration === "4s"
-            ? "4s"
-            : stored.omniDuration === "6s"
-              ? "6s"
-              : "4s",
-      aspectRatio: job.aspectRatio || stored.aspectRatio || "portrait",
-      downloadSaveMode:
-        job.downloadSaveMode === "ask"
-          ? "ask"
-          : job.downloadSaveMode === "auto"
-            ? "auto"
-            : stored.downloadSaveMode === "ask"
-              ? "ask"
-              : "auto",
-    }));
+    state.masterQueue = (stored.masterQueue || []).map((job) =>
+      normalizeJob(job, stored),
+    );
     state.nextProjectCounter = stored.nextProjectCounter;
     updateModelSpecificSettings();
 

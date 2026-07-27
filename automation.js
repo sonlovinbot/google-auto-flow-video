@@ -220,15 +220,18 @@ function finishQueue() {
   updateButtonStates();
 }
 
-function buildTaskList(job, expectedVideos) {
-  const items =
-    job.mode === "image-to-video" ? job.images : job.prompts;
-  state.taskList = items.map((item, index) => {
+/**
+ * `task.item` stays the first-frame handle in every mode — it is the identity
+ * used by addFailedPrompt, the failure report and the status messages. A second
+ * frame is carried alongside in `task.lastFrame` instead of reshaping `item`.
+ */
+export function buildTaskList(job, expectedVideos) {
+  const makeTask = (index, item, prompt, lastFrame = null) => {
     const task = {
       index: index + 1,
       item,
-      prompt:
-        job.mode === "image-to-video" ? job.prompts[index] || "" : item,
+      lastFrame,
+      prompt,
       status: "pending",
       expectedVideos,
       foundVideos: 0,
@@ -237,7 +240,31 @@ function buildTaskList(job, expectedVideos) {
     };
     state.masterTaskList.push(task);
     return task;
-  });
+  };
+
+  if (job.mode !== "image-to-video") {
+    state.taskList = job.prompts.map((prompt, index) =>
+      makeTask(index, prompt, prompt),
+    );
+    return;
+  }
+
+  // Jobs queued before frame modes existed have no framePairs; one image per
+  // video with no last frame is exactly the old behaviour.
+  const pairs = job.framePairs?.length
+    ? job.framePairs
+    : job.images.map((_, index) => ({ first: index, last: null }));
+
+  state.taskList = pairs.map((pair, index) =>
+    makeTask(
+      index,
+      job.images[pair.first],
+      job.prompts[index] || "",
+      pair.last === null || pair.last === undefined
+        ? null
+        : job.images[pair.last] || null,
+    ),
+  );
 }
 
 async function runNextJob(continueCurrentProject = false) {

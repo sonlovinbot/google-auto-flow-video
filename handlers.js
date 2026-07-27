@@ -17,12 +17,20 @@ import { stopScanner } from "./scanner.js";
 import { sortImageFiles } from "./utils.js";
 import { saveImage, clearAllImages, deleteImage } from "./db.js";
 import {
-  buildImagePromptPairs,
+  buildFramePairs,
+  countTransitions,
   getImageFileKey,
+  isFramePairMode,
+  normalizeFrameMode,
   parsePrompts,
 } from "./prompt-parser.js";
 
 const imagePreviewUrls = new WeakMap();
+
+/** The frame mode the Create tab is currently set to. */
+function currentFrameMode() {
+  return normalizeFrameMode(dom.frameModeSelector?.value);
+}
 
 function getImagePreviewUrl(file) {
   if (!file) return "";
@@ -47,11 +55,14 @@ function renderImagePromptPairs(preserveExisting = true) {
   }
 
   const prompts = parsePrompts(dom.promptsTextarea.value);
-  state.imagePromptPairs = buildImagePromptPairs(
+  const built = buildFramePairs(
     state.imageFileList,
     prompts,
     preserveExisting ? state.imagePromptPairs : [],
+    currentFrameMode(),
   );
+  state.imagePromptPairs = built.pairs;
+  state.framePairsMeta = built;
   dom.imagePromptPairsContainer.innerHTML = "";
 
   state.imagePromptPairs.forEach((pair, index) => {
@@ -428,17 +439,28 @@ async function addJobToQueue() {
 
   let imagePrompts = [];
   let savedImages = [];
+  let framePairs = null;
+  const frameMode =
+    mode === "image-to-video" ? currentFrameMode() : "single";
+  let usableImages = images;
+
   if (mode === "image-to-video") {
     if (images.length === 0) {
       logMessage(i18n("log_queue_job_add_fail_image"), "error");
       updateLiveStatus(i18n("log_queue_job_add_fail_image"), "error");
       return;
     }
+    if (isFramePairMode(frameMode) && images.length < 2) {
+      logMessage(i18n("log_queue_job_add_fail_frame_images"), "error");
+      updateLiveStatus(i18n("log_queue_job_add_fail_frame_images"), "error");
+      return;
+    }
 
     renderImagePromptPairs();
+    const expectedTransitions = countTransitions(images.length, frameMode);
     imagePrompts = state.imagePromptPairs.map((pair) => pair.prompt.trim());
     if (
-      imagePrompts.length !== images.length ||
+      imagePrompts.length !== expectedTransitions ||
       imagePrompts.some((prompt) => !prompt)
     ) {
       logMessage(i18n("log_queue_add_fail_missing_prompt"), "error");
@@ -446,8 +468,29 @@ async function addJobToQueue() {
       return;
     }
 
+    // Discrete mode with an odd count leaves a trailing image in no pair.
+    // Drop it before saving so it never becomes an orphaned blob.
+    const usedImageCount = state.imagePromptPairs.reduce(
+      (highest, pair) =>
+        Math.max(highest, pair.firstIndex, pair.lastIndex ?? pair.firstIndex),
+      -1,
+    );
+    usableImages = images.slice(0, usedImageCount + 1);
+    if (usableImages.length < images.length) {
+      logMessage(
+        i18n("filmstrip_warn_odd_image", {
+          count: images.length - usableImages.length,
+        }),
+        "warn",
+      );
+    }
+    framePairs = state.imagePromptPairs.map((pair) => ({
+      first: pair.firstIndex,
+      last: pair.lastIndex,
+    }));
+
     try {
-      for (const image of images) {
+      for (const image of usableImages) {
         savedImages.push(await saveImage(image));
       }
     } catch (error) {
@@ -459,7 +502,7 @@ async function addJobToQueue() {
       return;
     }
 
-    if (savedImages.length === 0 && images.length > 0) {
+    if (savedImages.length === 0 && usableImages.length > 0) {
       logMessage(i18n("log_db_read_all_fail"), "error");
       updateLiveStatus(i18n("status_db_read_all_fail"), "error");
       return;
@@ -469,6 +512,11 @@ async function addJobToQueue() {
   const job = {
     id: Date.now().toString(),
     mode,
+    frameMode,
+    // Indices into job.images, not ids: immune to id churn and trivially
+    // validated. job.images stays a flat de-duplicated list so a chained
+    // middle image is stored once and deleted once.
+    framePairs,
     prompts: mode === "image-to-video" ? imagePrompts : textPrompts,
     images: savedImages,
     downloadFolder,
@@ -482,7 +530,7 @@ async function addJobToQueue() {
     progress: {
       completed: 0,
       total:
-        mode === "image-to-video" ? savedImages.length : textPrompts.length,
+        mode === "image-to-video" ? imagePrompts.length : textPrompts.length,
     },
     currentIndex: 0,
   };

@@ -6,6 +6,9 @@ import { state } from "./state.js";
  */
 export const translations = {
   vi: {
+    job_summary_frames: "{images} ảnh → {count} video",
+    log_queue_job_add_fail_frame_images: "Chế độ đầu–cuối cần ít nhất 2 ảnh.",
+    filmstrip_warn_odd_image: "{count} ảnh cuối chưa có cặp và sẽ bị bỏ qua.",
     profile_duration_flow_default: "FLOW MẶC ĐỊNH",
     profile_save_ask: "HỎI KHI LƯU",
     profile_save_auto: "TỰ ĐỘNG LƯU",
@@ -235,6 +238,9 @@ export const translations = {
     wrong_page_message: "Tool chỉ hoạt động trên trang project của Flow.<br>Vui lòng điều hướng đến trang project.",
   },
   en: {
+    job_summary_frames: "{images} images → {count} videos",
+    log_queue_job_add_fail_frame_images: "First–last mode needs at least 2 images.",
+    filmstrip_warn_odd_image: "{count} trailing image(s) have no pair and will be skipped.",
     profile_duration_flow_default: "FLOW DEFAULT",
     profile_save_ask: "ASK ON SAVE",
     profile_save_auto: "AUTO SAVE",

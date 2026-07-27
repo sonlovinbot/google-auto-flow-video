@@ -10,6 +10,7 @@ export const state = {
   currentJobIndex: 0,
   imageFileList: [],
   imagePromptPairs: [],
+  framePairsMeta: null,
   currentMode: "text-to-video",
   currentIndex: 0,
   flowTabId: null,

@@ -208,9 +208,18 @@ function buildQueueRow(job, position) {
   row.dataset.jobId = job.id;
 
   const imageMode = job.mode === "image-to-video";
-  const summary = imageMode
-    ? i18n("job_summary_image", { count: job.images.length })
-    : i18n("job_summary_text", { count: job.prompts.length });
+  // In frame modes N images make fewer than N videos, so the image count is no
+  // longer the video count — progress.total is.
+  const framed = imageMode && job.frameMode && job.frameMode !== "single";
+  const videoCount = job.progress?.total ?? job.prompts.length;
+  const summary = !imageMode
+    ? i18n("job_summary_text", { count: job.prompts.length })
+    : framed
+      ? i18n("job_summary_frames", {
+          images: job.images.length,
+          count: videoCount,
+        })
+      : i18n("job_summary_image", { count: job.images.length });
   const modeLabel = i18n(imageMode ? "mode_image" : "mode_text");
   const isPending = job.status === "pending";
   const isActive = job.status === "running" || job.status === "downloading";
