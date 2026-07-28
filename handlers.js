@@ -290,7 +290,7 @@ function frameRoleKey(imageIndex, built) {
   return null;
 }
 
-function renderImagePromptPairs(preserveExisting = true) {
+export function renderImagePromptPairs(preserveExisting = true) {
   if (!dom.imagePromptPairsContainer) return;
   if (
     dom.modeSelector?.value !== "image-to-video" ||
@@ -322,8 +322,12 @@ function renderImagePromptPairs(preserveExisting = true) {
 
   const pairMode = isFramePairMode(built.frameMode);
   const linkAfterImage = new Map();
+  const startsAPair = new Set();
   if (pairMode) {
-    for (const pair of built.pairs) linkAfterImage.set(pair.firstIndex, pair);
+    for (const pair of built.pairs) {
+      linkAfterImage.set(pair.firstIndex, pair);
+      startsAPair.add(pair.firstIndex);
+    }
   }
   const unused = new Set(built.unusedImageIndices);
 
@@ -342,8 +346,9 @@ function renderImagePromptPairs(preserveExisting = true) {
     const link = linkAfterImage.get(index);
     if (link) {
       container.appendChild(createTransitionLink(link));
-    } else if (index < imageCount - 1) {
-      // Discrete mode: the boundary between two independent pairs.
+    } else if (startsAPair.has(index + 1)) {
+      // Discrete mode: a boundary between two independent pairs. Not drawn
+      // before a leftover odd image, which has no pair to be separated from.
       const gap = document.createElement("div");
       gap.className = "filmstrip-gap";
       container.appendChild(gap);
