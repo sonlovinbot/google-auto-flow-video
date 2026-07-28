@@ -90,6 +90,18 @@ test("frame mode switch mirrors the mode-switch pattern without colliding", () =
   assert.match(css, /\.frame-option \{/);
 });
 
+test("single mode keeps its original three-track row and full prompt width", () => {
+  // The reorder column only earns its width where order defines the pairing.
+  assert.match(handlers, /if \(reorderable\) row\.appendChild\(createMoveControls/);
+  assert.match(handlers, /reorderable: pairMode/);
+  for (const block of [css, css.slice(css.indexOf("@media (max-width: 400px)"))]) {
+    assert.match(
+      block,
+      /#imagePromptPairs\[data-frame-mode="single"\] \.image-prompt-pair \{\s*\n\s*grid-template-columns: \d+px \d+px minmax\(0, 1fr\);/,
+    );
+  }
+});
+
 test("the 400px breakpoint mirrors the four-track row grid", () => {
   const narrow = css.slice(css.indexOf("@media (max-width: 400px)"));
   assert.match(

@@ -463,6 +463,12 @@ select:focus {
   border-top: 1px solid var(--line-soft);
 }
 
+/* Single mode has no reorder column, so it keeps the original three tracks
+   and the prompt box keeps its full width on a narrow panel. */
+#imagePromptPairs[data-frame-mode="single"] .image-prompt-pair {
+  grid-template-columns: 24px 68px minmax(0, 1fr);
+}
+
 .image-prompt-pair:first-child {
   border-top: 0;
 }
@@ -1090,6 +1096,10 @@ input[type="checkbox"]:checked::before {
   .image-prompt-pair,
   .filmstrip-link {
     grid-template-columns: 22px 58px minmax(0, 1fr) 26px;
+  }
+
+  #imagePromptPairs[data-frame-mode="single"] .image-prompt-pair {
+    grid-template-columns: 22px 58px minmax(0, 1fr);
   }
 
   /* Drop the connector rail and let the prompt span the freed tracks. */

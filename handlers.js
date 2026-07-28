@@ -111,7 +111,7 @@ function createMoveControls(index, total) {
  * One image card. `withPrompt` reproduces the original single-mode row exactly;
  * frame modes render the prompt in the connector between two cards instead.
  */
-function createImageRow(file, index, { total, roleKey, withPrompt, pair }) {
+function createImageRow(file, index, { total, roleKey, withPrompt, pair, reorderable }) {
   const row = document.createElement("div");
   row.className = "image-prompt-pair filmstrip-frame";
 
@@ -181,7 +181,10 @@ function createImageRow(file, index, { total, roleKey, withPrompt, pair }) {
     copy.appendChild(createPromptInput(pair, "single"));
   }
 
-  row.append(rowIndex, imagePicker, copy, createMoveControls(index, total));
+  row.append(rowIndex, imagePicker, copy);
+  // Order only defines the pairing in frame modes; in single mode the arrows
+  // would earn nothing and cost the prompt box 26px on a 340px panel.
+  if (reorderable) row.appendChild(createMoveControls(index, total));
   row.appendChild(replacementInput);
   return row;
 }
@@ -330,6 +333,7 @@ function renderImagePromptPairs(preserveExisting = true) {
       roleKey: frameRoleKey(index, built),
       withPrompt: !pairMode,
       pair: pairMode ? null : built.pairs[index],
+      reorderable: pairMode,
     });
     if (unused.has(index)) row.classList.add("filmstrip-frame-unused");
     container.appendChild(row);
