@@ -45,6 +45,13 @@ const RETRY_ON_CURRENT_PAGE_CODES = new Set([
   "FIRST_FRAME_OPTION_MISSING",
   "FIRST_FRAME_CONFIRM_DISABLED",
   "FIRST_FRAME_NOT_ATTACHED",
+  "LAST_FRAME_OPTION_MISSING",
+  "LAST_FRAME_CONFIRM_DISABLED",
+  "LAST_FRAME_NOT_ATTACHED",
+  // When the End trigger is missing the first frame is already attached and
+  // both files are uploaded. A reload throws all of that away and cannot help:
+  // the cause is a wrong label, not a broken page.
+  "LAST_FRAME_TRIGGER_MISSING",
 ]);
 
 export function addFailedPrompt(item, reason, taskIndex, jobIndex) {
@@ -499,6 +506,34 @@ async function reloadAndReapplySettings(job) {
   }
 }
 
+/** Reads one stored image back out as a data URL for the injected script. */
+async function loadFrame(handle) {
+  const file = await getImage(handle.id);
+  if (!file) return null;
+  const dataUrl = await readFileAsDataURL(file);
+  if (!dataUrl) return null;
+  return { dataUrl, fileName: handle.name, mimeType: handle.type };
+}
+
+const LARGE_PAYLOAD_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Data URLs inflate roughly 1.37x and both frames travel in a single
+ * executeScript message, so a pair of large images can stall the tab.
+ */
+function warnIfPayloadLarge(...loadedFrames) {
+  const bytes = loadedFrames
+    .filter(Boolean)
+    .reduce((total, frame) => total + frame.dataUrl.length, 0);
+  if (bytes <= LARGE_PAYLOAD_BYTES) return;
+  logMessage(
+    i18n("log_frame_payload_large", {
+      size: Math.round(bytes / (1024 * 1024)),
+    }),
+    "warn",
+  );
+}
+
 /**
  * Runs one task submission attempt and normalises the injected script's reply
  * into `true` (submitted), a string failure code, or `false`.
@@ -533,40 +568,42 @@ async function submitTask(job, task, attempt, totalTasks) {
   logMessage(status, "info");
   updateLiveStatus(status, "info");
 
-  let dataUrl;
+  const fileReadError = {
+    outcome: "FILE_READ_ERROR",
+    injectionCode: null,
+    failureMessage: undefined,
+  };
+
+  let firstFrame;
+  let lastFrame = null;
   try {
-    const file = await getImage(image.id);
-    if (!file) {
-      return {
-        outcome: "FILE_READ_ERROR",
-        injectionCode: null,
-        failureMessage: undefined,
-      };
+    firstFrame = await loadFrame(image);
+    if (!firstFrame) return fileReadError;
+    if (task.lastFrame) {
+      lastFrame = await loadFrame(task.lastFrame);
+      if (!lastFrame) return fileReadError;
     }
-    dataUrl = await readFileAsDataURL(file);
   } catch {
-    return {
-      outcome: "FILE_READ_ERROR",
-      injectionCode: null,
-      failureMessage: undefined,
-    };
+    return fileReadError;
   }
 
-  const result = dataUrl
-    ? await injectScript(processImageAndPromptOnPage, [
-        dataUrl,
-        image.name,
-        image.type,
-        task.prompt,
-        aspectRatio,
-      ])
-    : "FILE_READ_ERROR";
+  warnIfPayloadLarge(firstFrame, lastFrame);
+
+  const result = await injectScript(processImageAndPromptOnPage, [
+    { prompt: task.prompt, aspectRatio, firstFrame, lastFrame },
+  ]);
 
   if (!result || typeof result !== "object") {
     return { outcome: result, injectionCode: null, failureMessage: undefined };
   }
 
   logTrace(result.trace, result.ok, "Flow task");
+
+  if (result.code === "LAST_FRAME_TRIGGER_MISSING") {
+    // The one string in the whole flow that was never verified against a live
+    // Flow page. Point the user straight at the override that fixes it.
+    logMessage(i18n("log_frame_trigger_hint"), "warn");
+  }
 
   let failureMessage;
   if (!result.ok) {

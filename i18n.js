@@ -6,6 +6,8 @@ import { state } from "./state.js";
  */
 export const translations = {
   vi: {
+    log_frame_payload_large: "Hai ảnh khung nặng ~{size}MB trong một lần gửi; nếu tab treo hãy dùng ảnh nhỏ hơn.",
+    log_frame_trigger_hint: "Không thấy ô khung cuối. Sửa FRAME_TRIGGER_END_TEXT trong selectorOverride cho khớp nhãn Flow đang hiện.",
     frame_mode_single: "Ảnh đầu",
     frame_mode_chained: "Nối tiếp",
     frame_mode_discrete: "Từng cặp",
@@ -257,6 +259,8 @@ export const translations = {
     wrong_page_message: "Tool chỉ hoạt động trên trang project của Flow.<br>Vui lòng điều hướng đến trang project.",
   },
   en: {
+    log_frame_payload_large: "Both frames total ~{size}MB in one message; use smaller images if the tab stalls.",
+    log_frame_trigger_hint: "The last-frame slot was not found. Set FRAME_TRIGGER_END_TEXT in selectorOverride to match the label Flow shows.",
     frame_mode_single: "First frame",
     frame_mode_chained: "Chained",
     frame_mode_discrete: "Pairs",

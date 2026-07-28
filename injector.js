@@ -741,14 +741,40 @@ export async function setInitialSettings(
   };
 }
 
-export async function processImageAndPromptOnPage(
-  dataUrl,
-  fileName,
-  mimeType,
-  prompt,
-  aspectRatio,
-  selectors,
-) {
+/**
+ * Attaches one or two frames plus a prompt to Flow's composer and submits.
+ *
+ * Takes an options object rather than positional arguments: two frames means
+ * two {dataUrl, fileName, mimeType} triples of identical shape, and a
+ * transposed pair would upload the right bytes under the wrong name and look
+ * like a Flow bug. `lastFrame: null` reproduces the original single-frame
+ * behaviour exactly — same steps, same codes, same timings.
+ */
+export async function processImageAndPromptOnPage(options, selectors) {
+  const {
+    prompt,
+    aspectRatio,
+    firstFrame,
+    lastFrame = null,
+  } = options || {};
+  const frames = [firstFrame, lastFrame].filter(Boolean);
+
+  // Flow's visible labels, patchable through chrome.storage.local
+  // selectorOverride without a rebuild. Every key has a literal fallback, so a
+  // missing or partial override cannot break the existing flow.
+  const sel = selectors || {};
+  const TXT = {
+    frameStart: sel.FRAME_TRIGGER_START_TEXT || "Start",
+    frameEnd: sel.FRAME_TRIGGER_END_TEXT || "End",
+    addToPrompt: sel.ADD_TO_PROMPT_TEXT || "Add to Prompt",
+    uploadsTab: sel.UPLOADS_TAB_TEXT || "Uploads",
+    addMedia: sel.ADD_MEDIA_TEXT || "Add Media",
+    uploadMedia: sel.UPLOAD_MEDIA_TEXT || "Upload media",
+    attachedFrameImgSelector:
+      sel.ATTACHED_FRAME_IMG_SELECTOR ||
+      'img[alt*="piece of media"], img[alt*="uploaded by you"]',
+  };
+
   const startedAt = Date.now();
   const trace = [];
   const normalize = (value) => (value || "").replace(/\s+/g, " ").trim();
@@ -773,8 +799,17 @@ export async function processImageAndPromptOnPage(
   const diagnostics = () => ({
     url: location.href,
     readyState: document.readyState,
-    fileName,
-    mimeType,
+    frames: frames.map((frame, index) => ({
+      role: index === 0 ? "first" : "last",
+      fileName: frame.fileName,
+      mimeType: frame.mimeType,
+    })),
+    // Which slots are actually filled, and what labels the composer is showing.
+    // A failure dump alone should answer "did the End image land anywhere".
+    attachedFrames: describeAttachedFrames(),
+    frameTriggersVisible: [TXT.frameStart, TXT.frameEnd].filter((text) =>
+      Boolean(findExactText(text)),
+    ),
     promptLength: String(prompt || "").length,
     fileInputs: Array.from(document.querySelectorAll('input[type="file"]')).map(
       (input) => ({
@@ -795,7 +830,7 @@ export async function processImageAndPromptOnPage(
       .filter(Boolean)
       .filter(
         (text) =>
-          text.includes(fileName) ||
+          frames.some((frame) => text.includes(frame.fileName)) ||
           text.includes("Failed") ||
           /(?:^|\s)\d+%(?:\s|$)/.test(text),
       )
@@ -898,7 +933,7 @@ export async function processImageAndPromptOnPage(
         element.children.length === 0 &&
         normalize(element.textContent) === text,
     );
-  const findAsset = () =>
+  const findAsset = (fileName) =>
     Array.from(
       document.querySelectorAll('button, [role="button"], [role="option"]'),
     ).find((element) => {
@@ -911,6 +946,36 @@ export async function processImageAndPromptOnPage(
     Array.from(document.querySelectorAll("img")).find(
       (image) => normalize(image.alt) === fileName,
     );
+
+  /**
+   * Attached frames, counted rather than found.
+   *
+   * The original code used a `.find()` for the first attached media button.
+   * With two slots that cannot tell them apart: it would report the Start frame
+   * as proof the End frame attached, skip the confirm click, and submit a
+   * one-frame video while every checkpoint reported success. Every decision
+   * below is therefore based on the count changing, never on existence.
+   */
+  const attachedFrameButtons = () =>
+    Array.from(document.querySelectorAll("button")).filter((button) =>
+      button.querySelector(TXT.attachedFrameImgSelector),
+    );
+  const countAttachedFrames = () => attachedFrameButtons().length;
+  const describeAttachedFrames = () =>
+    attachedFrameButtons().map((button, index) => {
+      const image = button.querySelector(TXT.attachedFrameImgSelector);
+      return {
+        index,
+        alt: normalize(image?.alt).slice(0, 80),
+        srcHead: String(image?.src || "").slice(0, 80),
+      };
+    });
+  /** A slot still showing its label ("Start"/"End") is empty. */
+  const isSlotTriggerVisible = (text) => Boolean(findExactText(text));
+  const findAddToPromptDialog = () =>
+    Array.from(document.querySelectorAll('[role="dialog"]')).find((element) =>
+      normalize(element.textContent).includes(TXT.addToPrompt),
+    );
   const getFailedIndicatorCount = () =>
     Array.from(
       document.querySelectorAll(
@@ -921,7 +986,7 @@ export async function processImageAndPromptOnPage(
         element.children.length === 0 &&
         normalize(element.textContent).toLowerCase() === "failed",
     ).length;
-  const getCurrentFileFailureCount = () =>
+  const getCurrentFileFailureCount = (fileName) =>
     Array.from(
       document.querySelectorAll(
         'button, [role="button"], [role="status"], [role="alert"]',
@@ -932,8 +997,8 @@ export async function processImageAndPromptOnPage(
         text.includes(fileName.toLowerCase()) && text.includes("failed")
       );
     }).length;
-  const getUploadState = (knownCurrentFileFailureCount = 0) => {
-    const asset = findAsset();
+  const getUploadState = (fileName, knownCurrentFileFailureCount = 0) => {
+    const asset = findAsset(fileName);
     if (asset) return { status: "ready", asset };
     const texts = Array.from(
       document.querySelectorAll(
@@ -953,7 +1018,7 @@ export async function processImageAndPromptOnPage(
       };
     }
     const failedIndicatorCount = getFailedIndicatorCount();
-    const currentFileFailureCount = getCurrentFileFailureCount();
+    const currentFileFailureCount = getCurrentFileFailureCount(fileName);
     if (currentFileFailureCount > knownCurrentFileFailureCount) {
       return {
         status: "failed-visible",
@@ -1249,24 +1314,24 @@ export async function processImageAndPromptOnPage(
     return null;
   };
 
-  try {
-    record("start", "Bắt đầu nạp First frame và prompt.", {
-      fileName,
-      mimeType,
-      promptLength: String(prompt || "").length,
-      aspectRatio,
-    });
+  /**
+   * Makes sure one file exists as project media, uploading it only if needed.
+   * Returns null on success or a fail() result. Uploads must stay sequential:
+   * the input lookup picks "the last file input on the page" and the progress
+   * probe matches any "NN%" text anywhere, so two at once read each other.
+   */
+  const ensureAssetReady = async ({ dataUrl, fileName, mimeType, role }) => {
     const fileResponse = await fetch(dataUrl);
     const blob = await fileResponse.blob();
     const resolvedMimeType = mimeType || blob.type || "image/png";
     const file = new File([blob], fileName, { type: resolvedMimeType });
-    record("file", "Đã dựng File từ dữ liệu extension.", {
+    record(`file:${role}`, `Đã dựng File (${role}) từ dữ liệu extension.`, {
       name: file.name,
       size: file.size,
       type: file.type,
     });
 
-    let assetReady = Boolean(findAsset());
+    let assetReady = Boolean(findAsset(fileName));
     const uploadAttemptKey = `${fileName}:${file.size}:${file.type}`;
     const uploadAttemptRegistry =
       window.__coachioUploadAttempts ||
@@ -1282,22 +1347,22 @@ export async function processImageAndPromptOnPage(
     ) {
       const remainingGuardMs = 120000 - uploadAttemptAge;
       record(
-        "upload-dedupe-wait",
+        `upload-dedupe-wait:${role}`,
         `File "${fileName}" đã được gửi trong phiên này; chờ media cũ hoàn tất thay vì upload lại.`,
         { uploadAttemptAge, remainingGuardMs },
       );
       assetReady = Boolean(
-        await waitFor(findAsset, remainingGuardMs, 250),
+        await waitFor(() => findAsset(fileName), remainingGuardMs, 250),
       );
       if (assetReady) {
         record(
-          "upload-dedupe-ready",
+          `upload-dedupe-ready:${role}`,
           `Media "${fileName}" xuất hiện từ lượt upload trước; bỏ qua upload lặp.`,
         );
       }
     }
     record(
-      "asset-check",
+      `asset-check:${role}`,
       assetReady
         ? `Media "${fileName}" đã có trong project; bỏ qua upload.`
         : `Chưa có media "${fileName}"; bắt đầu upload.`,
@@ -1309,20 +1374,20 @@ export async function processImageAndPromptOnPage(
         document.querySelectorAll("button"),
       ).find((button) => {
         const text = normalize(button.textContent);
-        return text.includes("add") && text.includes("Add Media");
+        return text.includes("add") && text.includes(TXT.addMedia);
       });
       if (addMediaButton) {
         const addMediaActivation = activate(addMediaButton);
         uploadMenu = await waitFor(
           () =>
             Array.from(document.querySelectorAll('[role="menu"]')).find(
-              (menu) => normalize(menu.textContent).includes("Upload media"),
+              (menu) => normalize(menu.textContent).includes(TXT.uploadMedia),
             ),
           3000,
           80,
         );
         record(
-          "upload-menu",
+          `upload-menu:${role}`,
           uploadMenu
             ? "Đã mở menu Add Media."
             : "Không thấy menu Add Media; vẫn thử input file trực tiếp.",
@@ -1336,19 +1401,19 @@ export async function processImageAndPromptOnPage(
             '[role="menuitem"], [role="option"], button, [role="button"]',
           ),
         ).find((element) =>
-          normalize(element.textContent).includes("Upload media"),
+          normalize(element.textContent).includes(TXT.uploadMedia),
         );
         if (uploadMediaTarget) {
           const uploadMediaActivation = activate(uploadMediaTarget);
           record(
-            "upload-menu-option",
+            `upload-menu-option:${role}`,
             "Đã kích hoạt mục “Upload media” trước khi gán file.",
             { activation: uploadMediaActivation },
           );
           await new Promise((resolve) => setTimeout(resolve, 120));
         } else {
           record(
-            "upload-menu-option",
+            `upload-menu-option:${role}`,
             "Menu Add Media đã mở nhưng không tìm thấy mục “Upload media”; thử input hiện có.",
           );
         }
@@ -1367,7 +1432,7 @@ export async function processImageAndPromptOnPage(
       if (!input) {
         return fail(
           "UPLOAD_INPUT_MISSING",
-          "upload-input",
+          `upload-input:${role}`,
           "Không tìm thấy input[type=file] nhận image trong 15 giây.",
         );
       }
@@ -1376,7 +1441,7 @@ export async function processImageAndPromptOnPage(
       transfer.items.add(file);
       const knownFailedIndicatorCount = getFailedIndicatorCount();
       const knownCurrentFileFailureCount =
-        getCurrentFileFailureCount();
+        getCurrentFileFailureCount(fileName);
       const filesSetter = Object.getOwnPropertyDescriptor(
         HTMLInputElement.prototype,
         "files",
@@ -1390,7 +1455,7 @@ export async function processImageAndPromptOnPage(
         new Event("change", { bubbles: true, composed: true }),
       );
       uploadAttemptRegistry[uploadAttemptKey] = Date.now();
-      record("upload-dispatch", "Đã gán file và phát input/change events.", {
+      record(`upload-dispatch:${role}`, "Đã gán file và phát input/change events.", {
         inputAccepted,
         changeAccepted,
         files: Array.from(input.files || []).map((item) => ({
@@ -1408,6 +1473,7 @@ export async function processImageAndPromptOnPage(
       // exactly once and then observed until it becomes visible.
       let uploadState = await waitFor(() => {
         const visibleState = getUploadState(
+          fileName,
           knownCurrentFileFailureCount,
         );
         if (visibleState) return visibleState;
@@ -1418,17 +1484,17 @@ export async function processImageAndPromptOnPage(
       }, 15000, 150);
       if (uploadState?.status === "accepted-hidden") {
         record(
-          "upload-accepted",
+          `upload-accepted:${role}`,
           "Flow đã tiêu thụ file; đang chờ media xuất hiện, không phát lại upload.",
         );
         uploadState = await waitFor(
-          () => getUploadState(knownCurrentFileFailureCount),
+          () => getUploadState(fileName, knownCurrentFileFailureCount),
           105000,
           250,
         );
       } else if (!uploadState) {
         record(
-          "upload-wait",
+          `upload-wait:${role}`,
           "Chưa có progress sau 15 giây; tiếp tục chờ upload gốc để tránh tạo media trùng.",
           {
             retainedFiles: Array.from(input.files || []).map(
@@ -1437,7 +1503,7 @@ export async function processImageAndPromptOnPage(
           },
         );
         uploadState = await waitFor(
-          () => getUploadState(knownCurrentFileFailureCount),
+          () => getUploadState(fileName, knownCurrentFileFailureCount),
           105000,
           250,
         );
@@ -1445,17 +1511,21 @@ export async function processImageAndPromptOnPage(
       if (!uploadState) {
         return fail(
           "UPLOAD_NOT_STARTED",
-          "upload-start",
+          `upload-start:${role}`,
           "Đã gửi file đúng một lần nhưng Flow không xuất hiện progress hoặc media mới sau 120 giây.",
         );
       }
       if (uploadState.status === "failed-visible") {
         const failedState = uploadState;
-        const recoveredAsset = await waitFor(findAsset, 10000, 200);
+        const recoveredAsset = await waitFor(
+          () => findAsset(fileName),
+          10000,
+          200,
+        );
         if (recoveredAsset) {
           uploadState = { status: "ready", asset: recoveredAsset };
           record(
-            "upload-recovered",
+            `upload-recovered:${role}`,
             `Flow từng hiện Failed nhưng media "${fileName}" vẫn xuất hiện; bỏ qua lỗi trung gian.`,
             {
               failedIndicatorCount: failedState.failedIndicatorCount,
@@ -1470,7 +1540,7 @@ export async function processImageAndPromptOnPage(
       if (uploadState.status === "failed-visible") {
         return fail(
           "UPLOAD_FAILED",
-          "upload-start",
+          `upload-start:${role}`,
           `Flow xuất hiện lỗi Failed mới gắn với lượt upload "${fileName}".`,
           {
             failedIndicatorCount: uploadState.failedIndicatorCount,
@@ -1481,7 +1551,7 @@ export async function processImageAndPromptOnPage(
           },
         );
       }
-      record("upload-start", "Flow đã nhận tín hiệu upload.", {
+      record(`upload-start:${role}`, "Flow đã nhận tín hiệu upload.", {
         status: uploadState.status,
         progress: uploadState.progress || null,
       });
@@ -1492,6 +1562,7 @@ export async function processImageAndPromptOnPage(
           await waitFor(
             () => {
               const state = getUploadState(
+                fileName,
                 knownCurrentFileFailureCount,
               );
               return state?.status === "ready" ? state : null;
@@ -1503,194 +1574,348 @@ export async function processImageAndPromptOnPage(
       if (!assetReady) {
         return fail(
           "UPLOAD_TIMEOUT",
-          "upload-ready",
+          `upload-ready:${role}`,
           "Flow đã bắt đầu nhận file nhưng media chưa sẵn sàng sau 90 giây.",
         );
       }
-      record("upload-ready", `Media "${fileName}" đã sẵn sàng.`);
+      record(`upload-ready:${role}`, `Media "${fileName}" đã sẵn sàng.`);
+    }
+    return null;
+  };
+  /**
+   * Closes a leftover "Add to Prompt" dialog. Best effort: if it will not
+   * close we still proceed, because clicking the next slot's trigger usually
+   * replaces the dialog contents anyway.
+   */
+  const closeAddToPromptDialog = async () => {
+    const dialog = findAddToPromptDialog();
+    if (!dialog) return { closed: true, method: "already-closed" };
+    const closeButton = Array.from(
+      dialog.querySelectorAll('button, [role="button"]'),
+    ).find((button) => {
+      const text = normalize(button.textContent).toLowerCase();
+      const aria = normalize(button.getAttribute("aria-label")).toLowerCase();
+      return text === "close" || aria === "close" || text === "cancel";
+    });
+    if (closeButton) activate(closeButton);
+    for (const type of ["keydown", "keyup"]) {
+      document.dispatchEvent(
+        new KeyboardEvent(type, {
+          key: "Escape",
+          code: "Escape",
+          keyCode: 27,
+          which: 27,
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+        }),
+      );
+    }
+    const gone = await waitFor(
+      () => (findAddToPromptDialog() ? null : true),
+      3000,
+      100,
+    );
+    return {
+      closed: Boolean(gone),
+      method: closeButton ? "close-button+escape" : "escape",
+    };
+  };
+
+  /**
+   * Attaches one already-uploaded asset to one composer slot.
+   * Returns null on success, or a fail() result.
+   *
+   * `ordinal` is how many frames must be attached once this slot is filled, so
+   * success is "the count grew past the baseline", never "some frame exists".
+   */
+  const attachFrame = async ({
+    fileName,
+    triggerText,
+    ordinal,
+    stepPrefix,
+    codePrefix,
+    label,
+    allowDialogReuse,
+  }) => {
+    const baselineCount = countAttachedFrames();
+    const triggerVisible = isSlotTriggerVisible(triggerText);
+    record(`${stepPrefix}-state`, `Trạng thái slot ${label} trước khi gắn.`, {
+      baselineCount,
+      triggerVisible,
+      ordinal,
+      attached: describeAttachedFrames(),
+    });
+
+    // Only skip on positive evidence. A redundant attach is recoverable; a
+    // wrong skip ships a video with a missing frame and reports success.
+    if (!triggerVisible && baselineCount >= ordinal) {
+      record(`${stepPrefix}-option`, `${label} đã được gắn sẵn; bỏ qua.`);
+      return null;
+    }
+    if (!triggerVisible && baselineCount < ordinal) {
+      return fail(
+        `${codePrefix}_TRIGGER_MISSING`,
+        `${stepPrefix}-trigger`,
+        `Không tìm thấy trigger “${triggerText}” và cũng chưa đủ ${ordinal} khung đã gắn.`,
+        { baselineCount, attached: describeAttachedFrames() },
+      );
     }
 
-    const findAttachedFrame = () =>
-      Array.from(document.querySelectorAll("button")).find((button) =>
-        button.querySelector(
-          'img[alt*="piece of media"], img[alt*="uploaded by you"]',
-        ),
+    let reusedDialog = false;
+    let dialog = allowDialogReuse ? findAddToPromptDialog() : null;
+    if (dialog) {
+      reusedDialog = true;
+      record(
+        `${stepPrefix}-dialog`,
+        "Tái sử dụng dialog Add to Prompt đang mở từ lượt thử trước.",
       );
-    const existingFrame = findAttachedFrame();
-    if (!existingFrame) {
-      let dialog = Array.from(
-        document.querySelectorAll('[role="dialog"]'),
-      ).find((element) =>
-        normalize(element.textContent).includes("Add to Prompt"),
-      );
-      if (dialog) {
+    } else {
+      // A dialog left open by the other slot must not be reused: selecting in
+      // it would overwrite that slot instead of filling this one.
+      if (findAddToPromptDialog()) {
+        const closeResult = await closeAddToPromptDialog();
         record(
-          "first-frame-dialog",
-          "Tái sử dụng dialog Add to Prompt đang mở từ lượt thử trước.",
-        );
-      } else {
-        const start = await waitFor(() => findExactText("Start"));
-        if (!start) {
-          return fail(
-            "FIRST_FRAME_TRIGGER_MISSING",
-            "first-frame-trigger",
-            "Media đã sẵn sàng nhưng không tìm thấy trigger “Start”.",
-          );
-        }
-        const startActivation = activate(start);
-        record("first-frame-trigger", "Đã kích hoạt trigger Start.", {
-          activation: startActivation,
-        });
-
-        dialog = await waitFor(() =>
-          Array.from(document.querySelectorAll('[role="dialog"]')).find(
-            (element) =>
-              normalize(element.textContent).includes("Add to Prompt"),
-          ),
+          `${stepPrefix}-dialog-close`,
+          closeResult.closed
+            ? "Đã đóng dialog Add to Prompt cũ trước khi mở slot mới."
+            : "Không đóng được dialog cũ; vẫn thử mở slot mới.",
+          closeResult,
         );
       }
-      if (!dialog) {
+      const trigger = await waitFor(() => findExactText(triggerText));
+      if (!trigger) {
         return fail(
-          "FIRST_FRAME_DIALOG_MISSING",
-          "first-frame-dialog",
-          "Đã kích hoạt Start nhưng dialog “Add to Prompt” không xuất hiện.",
+          `${codePrefix}_TRIGGER_MISSING`,
+          `${stepPrefix}-trigger`,
+          `Media đã sẵn sàng nhưng không tìm thấy trigger “${triggerText}”.`,
+          { baselineCount, attached: describeAttachedFrames() },
         );
       }
-      if (
-        !trace.some(
-          (entry) =>
-            entry.step === "first-frame-dialog" &&
-            entry.message.includes("Tái sử dụng"),
-        )
-      ) {
-        record("first-frame-dialog", "Dialog Add to Prompt đã mở.");
-      }
+      record(`${stepPrefix}-trigger`, `Đã kích hoạt trigger ${triggerText}.`, {
+        activation: activate(trigger),
+      });
+      dialog = await waitFor(findAddToPromptDialog);
+    }
+    if (!dialog) {
+      return fail(
+        `${codePrefix}_DIALOG_MISSING`,
+        `${stepPrefix}-dialog`,
+        `Đã kích hoạt ${triggerText} nhưng dialog “${TXT.addToPrompt}” không xuất hiện.`,
+      );
+    }
+    if (!reusedDialog) {
+      record(`${stepPrefix}-dialog`, "Dialog Add to Prompt đã mở.");
+    }
 
-      const findDialogOption = () =>
+    const findDialogOption = () =>
+      Array.from(
+        dialog.querySelectorAll('[role="option"], button, [role="button"]'),
+      ).find(
+        (element) =>
+          normalize(element.textContent).includes(fileName) ||
+          normalize(element.querySelector("img")?.alt) === fileName,
+      );
+    let option = await waitFor(findDialogOption, 3000, 100);
+    if (!option) {
+      const uploadsLabel =
         Array.from(
-          dialog.querySelectorAll('[role="option"], button, [role="button"]'),
+          dialog.querySelectorAll(
+            '[role="tab"], button, [role="button"], div, span, p',
+          ),
         ).find(
           (element) =>
-            normalize(element.textContent).includes(fileName) ||
-            normalize(element.querySelector("img")?.alt) === fileName,
+            element.children.length === 0 &&
+            normalize(element.textContent) === TXT.uploadsTab,
+        ) || findExactText(TXT.uploadsTab, dialog);
+      const uploadsTarget =
+        uploadsLabel?.closest?.('[role="tab"], button, [role="button"]') ||
+        uploadsLabel;
+      if (uploadsTarget) {
+        record(
+          `${stepPrefix}-source`,
+          "Media chưa có trong Recent; đã chuyển dialog sang nguồn Uploads.",
+          { activation: activate(uploadsTarget) },
         );
-      let option = await waitFor(findDialogOption, 3000, 100);
-      if (!option) {
-        const uploadsLabel =
-          Array.from(
-            dialog.querySelectorAll(
-              '[role="tab"], button, [role="button"], div, span, p',
-            ),
-          ).find(
-            (element) =>
-              element.children.length === 0 &&
-              normalize(element.textContent) === "Uploads",
-          ) || findExactText("Uploads", dialog);
-        const uploadsTarget =
-          uploadsLabel?.closest?.('[role="tab"], button, [role="button"]') ||
-          uploadsLabel;
-        if (uploadsTarget) {
-          const uploadsActivation = activate(uploadsTarget);
-          record(
-            "first-frame-source",
-            "Media chưa có trong Recent; đã chuyển dialog sang nguồn Uploads.",
-            { activation: uploadsActivation },
-          );
-        } else {
-          record(
-            "first-frame-source",
-            "Không tìm thấy tab Uploads trong dialog; tiếp tục chờ nguồn hiện tại.",
-          );
-        }
-        option = await waitFor(findDialogOption, 20000, 150);
-      }
-      if (!option) {
-        return fail(
-          "FIRST_FRAME_OPTION_MISSING",
-          "first-frame-option",
-          `Dialog mở nhưng không tìm thấy media "${fileName}" trong 20 giây.`,
-          {
-            options: Array.from(
-              dialog.querySelectorAll(
-                '[role="option"], button, [role="button"]',
-              ),
-            ).map((element) => normalize(element.textContent).slice(0, 160)),
-          },
+      } else {
+        record(
+          `${stepPrefix}-source`,
+          "Không tìm thấy tab Uploads trong dialog; tiếp tục chờ nguồn hiện tại.",
         );
       }
-      const optionActivation = activate(option);
-      record("first-frame-option", `Đã chọn "${fileName}" làm First frame.`, {
-        activation: optionActivation,
-        selected: {
-          ariaSelected: option.getAttribute("aria-selected"),
-          dataState: option.getAttribute("data-state"),
+      option = await waitFor(findDialogOption, 20000, 150);
+    }
+    if (!option) {
+      return fail(
+        `${codePrefix}_OPTION_MISSING`,
+        `${stepPrefix}-option`,
+        `Dialog mở nhưng không tìm thấy media "${fileName}" trong 20 giây.`,
+        {
+          options: Array.from(
+            dialog.querySelectorAll('[role="option"], button, [role="button"]'),
+          ).map((element) => normalize(element.textContent).slice(0, 160)),
         },
-      });
+      );
+    }
+    record(`${stepPrefix}-option`, `Đã chọn "${fileName}" làm ${label}.`, {
+      activation: activate(option),
+      selected: {
+        ariaSelected: option.getAttribute("aria-selected"),
+        dataState: option.getAttribute("data-state"),
+      },
+    });
 
-      let attachedAfterSelection = await waitFor(findAttachedFrame, 1200, 80);
-      if (!attachedAfterSelection) {
-        const confirmButton = await waitFor(() => {
-          const currentDialog = Array.from(
-            document.querySelectorAll('[role="dialog"]'),
-          ).find((element) =>
-            normalize(element.textContent).includes("Add to Prompt"),
-          );
+    // Wait on the count growing, not on any frame existing.
+    const grew = () => (countAttachedFrames() > baselineCount ? true : null);
+    let attached = await waitFor(grew, 1200, 80);
+    if (!attached) {
+      const confirmButton = await waitFor(
+        () => {
+          const currentDialog = findAddToPromptDialog();
           if (!currentDialog) return null;
           return Array.from(
             currentDialog.querySelectorAll('button, [role="button"]'),
           ).find((button) => {
             const text = normalize(button.textContent);
             return (
-              text.includes("Add to Prompt") &&
+              text.includes(TXT.addToPrompt) &&
               !button.disabled &&
               button.getAttribute("aria-disabled") !== "true"
             );
           });
-        }, 4000, 80);
-        if (!confirmButton) {
-          return fail(
-            "FIRST_FRAME_CONFIRM_DISABLED",
-            "first-frame-confirm",
-            `Đã chọn "${fileName}" nhưng nút “Add to Prompt” không được bật sau 4 giây.`,
-            {
-              option: {
-                ariaSelected: option.getAttribute("aria-selected"),
-                dataState: option.getAttribute("data-state"),
-              },
+        },
+        4000,
+        80,
+      );
+      if (!confirmButton) {
+        return fail(
+          `${codePrefix}_CONFIRM_DISABLED`,
+          `${stepPrefix}-confirm`,
+          `Đã chọn "${fileName}" nhưng nút “${TXT.addToPrompt}” không được bật sau 4 giây.`,
+          {
+            option: {
+              ariaSelected: option.getAttribute("aria-selected"),
+              dataState: option.getAttribute("data-state"),
             },
-          );
-        }
-        const confirmActivation = activate(confirmButton);
-        record(
-          "first-frame-confirm",
-          "Đã xác nhận nút “Add to Prompt”.",
-          { activation: confirmActivation },
-        );
-        attachedAfterSelection = await waitFor(
-          findAttachedFrame,
-          10000,
-          100,
-        );
-      } else {
-        record(
-          "first-frame-confirm",
-          "Flow đã tự gắn ảnh ngay sau khi chọn; không cần nút xác nhận.",
+          },
         );
       }
+      record(
+        `${stepPrefix}-confirm`,
+        `Đã xác nhận nút “${TXT.addToPrompt}”.`,
+        { activation: activate(confirmButton) },
+      );
+      attached = await waitFor(grew, 10000, 100);
     } else {
-      record("first-frame-option", "First frame đã được gắn sẵn; bỏ qua.");
-    }
-
-    const frameAttached = await waitFor(findAttachedFrame, 10000, 100);
-    if (!frameAttached) {
-      return fail(
-        "FIRST_FRAME_NOT_ATTACHED",
-        "first-frame-attached",
-        `Đã chọn "${fileName}" nhưng First frame không xuất hiện trong composer.`,
+      record(
+        `${stepPrefix}-confirm`,
+        "Flow đã tự gắn ảnh ngay sau khi chọn; không cần nút xác nhận.",
       );
     }
-    record("first-frame-attached", "First frame đã xuất hiện trong composer.");
 
+    const finalCount = countAttachedFrames();
+    if (finalCount <= baselineCount || finalCount < ordinal) {
+      return fail(
+        `${codePrefix}_NOT_ATTACHED`,
+        `${stepPrefix}-attached`,
+        `Đã chọn "${fileName}" nhưng ${label} không xuất hiện trong composer.`,
+        {
+          baselineCount,
+          finalCount,
+          ordinal,
+          attached: describeAttachedFrames(),
+          triggerStillVisible: isSlotTriggerVisible(triggerText),
+        },
+      );
+    }
+    record(`${stepPrefix}-attached`, `${label} đã xuất hiện trong composer.`, {
+      baselineCount,
+      finalCount,
+      attached: describeAttachedFrames(),
+    });
+    return null;
+  };
+
+  try {
+    if (!firstFrame?.dataUrl) {
+      return fail(
+        "FILE_READ_ERROR",
+        "start",
+        "Thiếu dữ liệu ảnh khung đầu.",
+      );
+    }
+    record("start", "Bắt đầu nạp khung hình và prompt.", {
+      frames: frames.map((frame) => frame.fileName),
+      hasLastFrame: Boolean(lastFrame),
+      promptLength: String(prompt || "").length,
+      aspectRatio,
+    });
+
+    // Uploads first and strictly sequential, before any dialog is open: an
+    // upload failure then leaves the composer clean for the retry.
+    const firstUpload = await ensureAssetReady({ ...firstFrame, role: "first" });
+    if (firstUpload) return firstUpload;
+    if (lastFrame) {
+      const lastUpload = await ensureAssetReady({ ...lastFrame, role: "last" });
+      if (lastUpload) return lastUpload;
+    }
+
+    const firstAttach = await attachFrame({
+      fileName: firstFrame.fileName,
+      triggerText: TXT.frameStart,
+      ordinal: 1,
+      stepPrefix: "first-frame",
+      codePrefix: "FIRST_FRAME",
+      label: "First frame",
+      // Only ever reuse a dialog left behind by a previous failed attempt.
+      allowDialogReuse: countAttachedFrames() === 0,
+    });
+    if (firstAttach) return firstAttach;
+
+    if (lastFrame) {
+      const closeResult = await closeAddToPromptDialog();
+      record(
+        "last-frame-dialog-close",
+        closeResult.closed
+          ? "Đã đóng dialog sau khi gắn First frame."
+          : "Dialog vẫn mở sau khi gắn First frame; tiếp tục mở slot End.",
+        closeResult,
+      );
+      const lastAttach = await attachFrame({
+        fileName: lastFrame.fileName,
+        triggerText: TXT.frameEnd,
+        ordinal: 2,
+        stepPrefix: "last-frame",
+        codePrefix: "LAST_FRAME",
+        label: "Last frame",
+        allowDialogReuse: false,
+      });
+      if (lastAttach) return lastAttach;
+    }
+
+    // Nothing may be submitted with a slot missing.
+    const requiredFrames = lastFrame ? 2 : 1;
+    const attachedCount = countAttachedFrames();
+    if (attachedCount < requiredFrames) {
+      return fail(
+        lastFrame ? "LAST_FRAME_NOT_ATTACHED" : "FIRST_FRAME_NOT_ATTACHED",
+        "frames-verify",
+        `Cần ${requiredFrames} khung nhưng composer chỉ có ${attachedCount}.`,
+        {
+          attachedCount,
+          requiredFrames,
+          attached: describeAttachedFrames(),
+          triggersVisible: [TXT.frameStart, TXT.frameEnd].filter((text) =>
+            isSlotTriggerVisible(text),
+          ),
+        },
+      );
+    }
+    record("frames-verify", `Đã xác nhận ${attachedCount} khung trong composer.`, {
+      attachedCount,
+      requiredFrames,
+      attached: describeAttachedFrames(),
+    });
     const editor = await waitFor(() =>
       document.querySelector(
         'div[contenteditable="true"][data-slate-editor="true"][role="textbox"]',
