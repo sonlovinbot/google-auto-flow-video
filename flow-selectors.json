@@ -1,8 +1,19 @@
 {
-  "version": 1,
-  "targetFlowUI": "Slate prompt editor, Omni Flash + Veo 3.1 model menu (2026-07)",
-  "note": "Flow is a third-party UI that changes without notice. When automation stops finding a control, update the matching XPath here — or paste a patched copy of this object into chrome.storage.local under 'selectorOverride' to fix it without reinstalling the extension.",
+  "version": 2,
+  "targetFlowUI": "Slate prompt editor, Omni Flash + Veo 3.1 model menu, Start/End frame slots (2026-07)",
+  "note": "Flow is a third-party UI that changes without notice. When automation stops finding a control, update the matching entry here — or set chrome.storage.local.selectorOverride to an object with only the keys you want to change; it is merged over this file, so you never need to copy the whole set.",
+  "textNote": "The *_TEXT entries are the visible labels the injected script matches on, not XPaths. FRAME_TRIGGER_END_TEXT is the newest and least battle-tested: if last-frame attach fails with LAST_FRAME_TRIGGER_MISSING, read the real label out of the failure log's composerTexts and set it here.",
+  "deprecated": {
+    "START_IMAGE_ADD_BUTTON_XPATH": "Unused. The injected media flow matches the visible label instead — patch FRAME_TRIGGER_START_TEXT."
+  },
   "selectors": {
+    "FRAME_TRIGGER_START_TEXT": "Start",
+    "FRAME_TRIGGER_END_TEXT": "End",
+    "ADD_TO_PROMPT_TEXT": "Add to Prompt",
+    "UPLOADS_TAB_TEXT": "Uploads",
+    "ADD_MEDIA_TEXT": "Add Media",
+    "UPLOAD_MEDIA_TEXT": "Upload media",
+    "ATTACHED_FRAME_IMG_SELECTOR": "img[alt*=\"piece of media\"], img[alt*=\"uploaded by you\"]",
     "PROMPT_TEXTAREA_ID": "div[contenteditable=\"true\"][data-slate-editor=\"true\"][role=\"textbox\"]",
     "GENERATE_BUTTON_XPATH": "//button[not(@disabled) and @aria-disabled!='true' and (.//*[normalize-space(text())='arrow_forward'] or .//*[normalize-space(text())='Create'])]",
     "NEW_PROJECT_BUTTON_XPATH": "//button[contains(normalize-space(.), 'New project') or contains(normalize-space(.), 'New Project')]",

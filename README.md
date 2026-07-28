@@ -71,25 +71,50 @@
 6.  Click **Add to Queue**.
 7.  Click **Start Queue** and let the automation handle the rest!
 
+## First frame + last frame
+
+Image-to-Video offers three frame modes, chosen above the image picker:
+
+| Mode | Pairing | 20 images produce | Each image used |
+|---|---|---|---|
+| **First frame** | one image per video | 20 videos | once |
+| **Chained** | 1→2, 2→3, 3→4 … | 19 videos | middles twice |
+| **Pairs** | 1→2, 3→4, 5→6 … | 10 videos | once |
+
+In the two frame modes a video is bracketed by a start image and an end image,
+and the prompt describes the motion between them. The list renders as a
+filmstrip: every image appears exactly once, with the prompt box sitting between
+two consecutive images. Use the arrows on each card to reorder; prompts stay at
+their position while the images move under them, so a mistake is visible
+immediately.
+
+Prompt rules are the same in every mode: one prompt is shared by all videos,
+otherwise supply exactly one per video. Missing prompts block the job with a
+message; extra prompts are reported rather than silently dropped.
+
+A middle image is uploaded to Flow only once even though two videos use it, and
+jobs queued before this feature existed keep running as First frame.
+
 ## When Google changes the Flow UI
 
-The automation drives Flow through XPath and CSS selectors that match the page's
-visible controls, so a Google redesign can break a step. Those selectors live in
-[`flow-selectors.json`](flow-selectors.json) — edit that file and reload the
-extension to repair it.
+The automation drives Flow through XPaths and, for the media flow, the visible
+labels on the page — so a Google redesign can break a step. Both live in
+[`flow-selectors.json`](flow-selectors.json); edit it and reload the extension.
 
-To patch without touching the files, store a full replacement set from the side
-panel's devtools console:
+To patch without touching the files, set only the keys you want to change from
+the side panel's devtools console:
 
 ```js
-chrome.storage.local.set({
-  selectorOverride: { selectors: { /* all keys from flow-selectors.json */ } },
-});
+chrome.storage.local.set({ selectorOverride: { FRAME_TRIGGER_END_TEXT: "Jump to" } });
 ```
 
-The override is used only when it contains every required key; an incomplete one
-is ignored with a warning and the bundled set is used instead. Remove it with
+The override is merged over the bundled set, so a single key is enough. Values
+that are not non-empty strings are ignored with a warning. Remove it with
 `chrome.storage.local.remove("selectorOverride")`.
+
+**If last-frame attach fails** with `LAST_FRAME_TRIGGER_MISSING`, the label this
+build expects (`End`) is not what your Flow shows. The failure entry in the log
+carries the labels it did find — set `FRAME_TRIGGER_END_TEXT` to the right one.
 
 ## Development
 

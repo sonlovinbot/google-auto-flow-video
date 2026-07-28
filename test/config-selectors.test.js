@@ -68,7 +68,7 @@ test("loads the bundled selectors when there is no override", async () => {
   );
 });
 
-test("a complete user override wins over the bundled file", async () => {
+test("a user override wins over the bundled file", async () => {
   const override = {
     selectors: {
       ...bundled.selectors,
@@ -86,15 +86,17 @@ test("a complete user override wins over the bundled file", async () => {
   );
 });
 
-test("an incomplete override is ignored instead of half-applied", async () => {
+test("a single-key override is merged, not swapped in", async () => {
+  // Fixing one broken label must not require hand-copying every other key.
   stubChrome({
-    selectorOverride: { selectors: { GENERATE_BUTTON_XPATH: "//button" } },
+    selectorOverride: { selectors: { FRAME_TRIGGER_END_TEXT: "Jump to" } },
   });
   stubFetch(bundled);
   state.selectors = {};
 
   assert.equal(await loadLocalConfig(), true);
-  // Falls back to the complete bundled set rather than running with one key.
+  assert.equal(state.selectors.FRAME_TRIGGER_END_TEXT, "Jump to");
+  // Everything the user did not mention still comes from the bundled file.
   assert.equal(
     state.selectors.GENERATE_BUTTON_XPATH,
     bundled.selectors.GENERATE_BUTTON_XPATH,
@@ -103,6 +105,55 @@ test("an incomplete override is ignored instead of half-applied", async () => {
     state.selectors.SETTINGS_BUTTON_XPATH,
     bundled.selectors.SETTINGS_BUTTON_XPATH,
   );
+});
+
+test("a bare override object without a selectors wrapper also works", async () => {
+  stubChrome({ selectorOverride: { FRAME_TRIGGER_END_TEXT: "Finish" } });
+  stubFetch(bundled);
+  state.selectors = {};
+
+  assert.equal(await loadLocalConfig(), true);
+  assert.equal(state.selectors.FRAME_TRIGGER_END_TEXT, "Finish");
+});
+
+test("empty or non-string override values are ignored", async () => {
+  stubChrome({
+    selectorOverride: {
+      selectors: {
+        FRAME_TRIGGER_END_TEXT: "   ",
+        UPLOADS_TAB_TEXT: null,
+        ADD_TO_PROMPT_TEXT: "Attach",
+      },
+    },
+  });
+  stubFetch(bundled);
+  state.selectors = {};
+
+  assert.equal(await loadLocalConfig(), true);
+  assert.equal(state.selectors.FRAME_TRIGGER_END_TEXT, "End");
+  assert.equal(state.selectors.UPLOADS_TAB_TEXT, "Uploads");
+  assert.equal(state.selectors.ADD_TO_PROMPT_TEXT, "Attach");
+});
+
+test("the new frame label keys are not required, so old overrides survive", async () => {
+  const REQUIRED = readFileSync(join(projectDirectory, "config.js"), "utf8");
+  for (const key of [
+    "FRAME_TRIGGER_START_TEXT",
+    "FRAME_TRIGGER_END_TEXT",
+    "ADD_TO_PROMPT_TEXT",
+    "UPLOADS_TAB_TEXT",
+    "ATTACHED_FRAME_IMG_SELECTOR",
+  ]) {
+    const required = REQUIRED.slice(
+      REQUIRED.indexOf("REQUIRED_SELECTORS = ["),
+      REQUIRED.indexOf("];", REQUIRED.indexOf("REQUIRED_SELECTORS = [")),
+    );
+    assert.doesNotMatch(
+      required,
+      new RegExp(key),
+      `${key} must stay optional or every saved override breaks`,
+    );
+  }
 });
 
 test("a truncated selector file fails startup loudly", async () => {

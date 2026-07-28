@@ -65,21 +65,6 @@ async function readBundledSelectors() {
  */
 export async function loadLocalConfig() {
   try {
-    const override = await readOverride();
-    if (override) {
-      const overrideSelectors = override.selectors || override;
-      const missing = missingSelectors(overrideSelectors);
-      if (missing.length === 0) {
-        state.selectors = overrideSelectors;
-        logMessage(i18n("log_config_override_loaded"), "warn");
-        return true;
-      }
-      logMessage(
-        i18n("log_config_override_invalid", { keys: missing.join(", ") }),
-        "warn",
-      );
-    }
-
     const bundled = await readBundledSelectors();
     const missing = missingSelectors(bundled.selectors);
     if (missing.length > 0) {
@@ -91,7 +76,35 @@ export async function loadLocalConfig() {
       return false;
     }
 
-    state.selectors = bundled.selectors;
+    // The override is merged over the bundled set, not swapped in, so a user
+    // can patch a single label without hand-copying every key — and adding new
+    // keys here never invalidates an override someone is already relying on.
+    const override = await readOverride();
+    const overrideSelectors = override
+      ? override.selectors || override
+      : null;
+    const patched = Object.entries(overrideSelectors || {}).filter(
+      ([, value]) => typeof value === "string" && value.trim(),
+    );
+
+    state.selectors = { ...bundled.selectors, ...Object.fromEntries(patched) };
+
+    if (overrideSelectors) {
+      const ignored = Object.keys(overrideSelectors).length - patched.length;
+      logMessage(
+        i18n("log_config_override_loaded", {
+          keys: patched.map(([key]) => key).join(", ") || "-",
+        }),
+        "warn",
+      );
+      if (ignored > 0) {
+        logMessage(
+          i18n("log_config_override_invalid", { count: ignored }),
+          "warn",
+        );
+      }
+    }
+
     logMessage(
       i18n("log_config_loaded_versioned", {
         version: bundled.version ?? "?",
