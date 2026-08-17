@@ -50,6 +50,16 @@ test("the bundled selector file is versioned and complete", () => {
   }
 });
 
+test("current Flow count labels and compact settings button are configurable", () => {
+  assert.equal(
+    bundled.selectors.OUTPUT_COUNT_FORMATS_TEXT,
+    "x{count}|{count}x",
+  );
+  assert.match(bundled.selectors.SETTINGS_BUTTON_XPATH, /crop_9_16/);
+  assert.match(bundled.selectors.SETTINGS_BUTTON_XPATH, /aria-haspopup='menu'/);
+  assert.doesNotMatch(bundled.selectors.SETTINGS_BUTTON_XPATH, /Video/);
+});
+
 test("selectors no longer live inside config.js", () => {
   const source = readFileSync(join(projectDirectory, "config.js"), "utf8");
   assert.doesNotMatch(source, /data-slate-editor/);

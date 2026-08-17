@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "targetFlowUI": "Slate prompt editor, Omni Flash + Veo 3.1 model menu, Start/End frame slots (2026-07)",
+  "version": 4,
+  "targetFlowUI": "Projects defaulting to Image/Nano Banana, Slate prompt editor, x1-x4 output tabs, Omni Flash + Veo 3.1 model menu, Start/End frame slots (2026-08-09)",
   "note": "Flow is a third-party UI that changes without notice. When automation stops finding a control, update the matching entry here — or set chrome.storage.local.selectorOverride to an object with only the keys you want to change; it is merged over this file, so you never need to copy the whole set.",
   "textNote": "The *_TEXT entries are the visible labels the injected script matches on, not XPaths. FRAME_TRIGGER_END_TEXT is the newest and least battle-tested: if last-frame attach fails with LAST_FRAME_TRIGGER_MISSING, read the real label out of the failure log's composerTexts and set it here.",
   "deprecated": {
@@ -13,6 +13,7 @@
     "UPLOADS_TAB_TEXT": "Uploads",
     "ADD_MEDIA_TEXT": "Add Media",
     "UPLOAD_MEDIA_TEXT": "Upload media",
+    "OUTPUT_COUNT_FORMATS_TEXT": "x{count}|{count}x",
     "ATTACHED_FRAME_IMG_SELECTOR": "img[alt*=\"piece of media\"], img[alt*=\"uploaded by you\"]",
     "PROMPT_TEXTAREA_ID": "div[contenteditable=\"true\"][data-slate-editor=\"true\"][role=\"textbox\"]",
     "GENERATE_BUTTON_XPATH": "//button[not(@disabled) and @aria-disabled!='true' and (.//*[normalize-space(text())='arrow_forward'] or .//*[normalize-space(text())='Create'])]",
@@ -23,7 +24,7 @@
     "HIDDEN_FILE_INPUT_XPATH": "//input[@type='file' and (contains(@accept, 'image') or not(@accept))]",
     "UPLOAD_SPINNER_XPATH": "//*[contains(normalize-space(text()), '%') or normalize-space(text())='progress_activity']",
     "IMAGE_POLICY_ERROR_POPUP_XPATH": "//*[@data-sonner-toast and contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'policy')]",
-    "SETTINGS_BUTTON_XPATH": "//button[contains(normalize-space(.), 'Video ·')]",
+    "SETTINGS_BUTTON_XPATH": "//button[@aria-haspopup='menu' and (contains(normalize-space(.), 'crop_9_16') or contains(normalize-space(.), 'crop_16_9'))]",
     "MODEL_SELECTION_BUTTON_XPATH": "//button[contains(normalize-space(.), 'Omni Flash') or contains(normalize-space(.), 'Veo 3.1')]",
     "MODEL_OMNI_FLASH_XPATH": "//*[@role='menuitem' and contains(normalize-space(.), 'Omni Flash')]",
     "MODEL_VEO_3_LITE_XPATH": "//*[@role='menuitem' and contains(normalize-space(.), 'Veo 3.1 - Lite')]",

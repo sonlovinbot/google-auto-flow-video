@@ -2,14 +2,14 @@ const translations = {
   vi: {
     subtitle: "Trình quản lý tác vụ tự động cho Flow AI (Veo)",
     badge_classic: "EXTENSION",
-    classic_title: "Phiên bản 8.4.2 (Extension)",
+    classic_title: "Phiên bản 8.5.0 (Extension)",
     classic_desc:
       "Mở giao diện tạo video trực tiếp trong Chrome.",
   },
   en: {
     subtitle: "Automated task manager for Flow AI (Veo)",
     badge_classic: "EXTENSION",
-    classic_title: "Version 8.4.2 (Extension)",
+    classic_title: "Version 8.5.0 (Extension)",
     classic_desc:
       "Open the video creation workspace directly in Chrome.",
   },

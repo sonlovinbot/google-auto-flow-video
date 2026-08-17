@@ -140,7 +140,13 @@ async function renderWith(frameMode, imageCount) {
   state.imagePromptPairs = [];
 
   handlers.renderImagePromptPairs(false);
-  return { container, storage, state, nodes: stub.walk(container) };
+  return {
+    container,
+    listeners: stub.listeners,
+    storage,
+    state,
+    nodes: stub.walk(container),
+  };
 }
 
 test("chained mode renders every image once with prompts between them", async () => {
@@ -253,4 +259,20 @@ test("an empty image list clears the strip without throwing", async () => {
   const { container, state } = await renderWith("chained", 0);
   assert.equal(container.style.display, "none");
   assert.deepEqual(state.imagePromptPairs, []);
+});
+
+test("remove action deletes exactly one selected image and rebuilds rows", async () => {
+  const { listeners, state } = await renderWith("single", 3);
+  const removeListeners = listeners.filter(
+    ({ node, type }) =>
+      type === "click" && node.classList.contains("image-prompt-remove"),
+  );
+
+  assert.equal(removeListeners.length, 3);
+  removeListeners[1].handler();
+  assert.deepEqual(
+    state.imageFileList.map((file) => file.name),
+    ["1.png", "3.png"],
+  );
+  assert.equal(state.imagePromptPairs.length, 2);
 });

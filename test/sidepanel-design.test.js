@@ -58,8 +58,16 @@ test("image prompt rows include a replaceable thumbnail without losing prompt UI
   // Replacing an image must carry the row's existing prompt across.
   assert.match(handlers, /\.\.\.pair,/);
   assert.match(handlers, /renderImagePromptPairs\(true\)/);
-  assert.match(handlers, /row\.append\(rowIndex, imagePicker, copy/);
+  assert.match(handlers, /row\.append\(rowIndex, mediaWrap, copy/);
   assert.match(css, /\.image-prompt-media img/);
+});
+
+test("every selected image row has a compact remove action", () => {
+  assert.match(handlers, /image-prompt-remove/);
+  assert.match(handlers, /removeSelectedImage\(index\)/);
+  assert.match(handlers, /state\.imageFileList\.splice\(index, 1\)/);
+  assert.match(handlers, /syncSelectedImageSummary\(\)/);
+  assert.match(css, /\.image-prompt-remove \{/);
 });
 
 test("filmstrip renders each image once with prompts between them", () => {

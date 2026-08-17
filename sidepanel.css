@@ -482,9 +482,16 @@ select:focus {
   font-weight: 900;
 }
 
-.image-prompt-media {
+.image-prompt-media-wrap {
   position: relative;
   width: 68px;
+  min-height: 88px;
+}
+
+.image-prompt-media {
+  position: relative;
+  width: 100%;
+  height: 100%;
   min-height: 88px;
   padding: 0;
   overflow: hidden;
@@ -512,6 +519,31 @@ select:focus {
   background: var(--ink);
   font-family: "Material Symbols Outlined";
   font-size: 14px;
+}
+
+.image-prompt-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: #fff;
+  background: rgb(26 24 21 / 88%);
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 50%;
+  box-shadow: 0 1px 5px rgb(0 0 0 / 28%);
+  place-items: center;
+}
+
+.image-prompt-remove:hover {
+  background: var(--danger);
+}
+
+.image-prompt-remove .material-symbols-outlined {
+  font-size: 16px;
 }
 
 .image-prompt-copy {
@@ -1100,6 +1132,10 @@ input[type="checkbox"]:checked::before {
 
   #imagePromptPairs[data-frame-mode="single"] .image-prompt-pair {
     grid-template-columns: 22px 58px minmax(0, 1fr);
+  }
+
+  .image-prompt-media-wrap {
+    width: 58px;
   }
 
   /* Drop the connector rail and let the prompt span the freed tracks. */

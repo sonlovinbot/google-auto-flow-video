@@ -11,8 +11,28 @@ const injector = readFileSync(
   "utf8",
 );
 
+test("Flow output count supports both new x1 and legacy 1x tabs", () => {
+  assert.match(injector, /`x\$\{normalizedOutputCount\}`/);
+  assert.match(injector, /`\$\{normalizedOutputCount\}x`/);
+  assert.match(injector, /OUTPUT_COUNT_FORMATS_TEXT/);
+  assert.match(injector, /const countResult = await clickTab\(countLabels/);
+  assert.match(injector, /const countLabel = countResult\.label/);
+});
+
+test("Flow settings supports projects that initially open in Image mode", () => {
+  assert.match(injector, /findSettingsButton/);
+  assert.match(injector, /SETTINGS_BUTTON_XPATH/);
+  assert.doesNotMatch(injector, /text\.startsWith\("Video"\)/);
+  assert.match(injector, /findSettingsMenuWithTab\("Video"\)/);
+  assert.match(injector, /findSettingsMenuWithTab\("Frames"\)/);
+  assert.match(injector, /Flow đã chuyển từ Image sang Video/);
+});
+
 test("Flow upload is dispatched once and observed through the silent window", () => {
-  assert.match(injector, /upload-menu-option/);
+  assert.match(injector, /findImageFileInput/);
+  assert.match(injector, /bỏ qua menu Upload media/);
+  assert.doesNotMatch(injector, /activate\(uploadMediaTarget\)/);
+  assert.doesNotMatch(injector, /upload-menu-option/);
   assert.match(injector, /accepted-hidden/);
   assert.match(injector, /105000/);
   assert.doesNotMatch(injector, /upload-drop-fallback/);

@@ -479,25 +479,35 @@ export async function setInitialSettings(
       events,
     };
   };
-  const clickTab = async (text, root = document) => {
-    const step = `tab:${text}`;
+  const clickTab = async (textOrAliases, root = document) => {
+    const labels = Array.isArray(textOrAliases)
+      ? textOrAliases
+      : [textOrAliases];
+    const requestedLabel = labels.join("/");
+    const step = `tab:${requestedLabel}`;
     const tab = await waitFor(
-      () => findByText('[role="tab"]', text, root),
+      () =>
+        labels
+          .map((label) => findByText('[role="tab"]', label, root))
+          .find(Boolean),
       5000,
     );
     if (!tab) {
       return fail(
         step,
-        `Không tìm thấy tab "${text}" trong 5 giây.`,
+        `Không tìm thấy tab "${requestedLabel}" trong 5 giây.`,
         diagnostics().tabs,
       );
     }
-    record(step, `Đã tìm thấy "${normalize(tab.textContent)}".`);
+    const observedLabel = normalize(tab.textContent);
+    record(step, `Đã tìm thấy "${observedLabel}".`);
     if (tab.getAttribute("aria-selected") !== "true") {
       const activation = activate(tab);
-      record(step, `Đã kích hoạt tab "${text}", đang chờ selected.`, {
-        activation,
-      });
+      record(
+        step,
+        `Đã kích hoạt tab "${observedLabel}", đang chờ selected.`,
+        { activation },
+      );
       const selected = await waitFor(
         () => tab.getAttribute("aria-selected") === "true",
         3000,
@@ -505,16 +515,16 @@ export async function setInitialSettings(
       if (!selected) {
         return fail(
           step,
-          `Tab "${text}" không chuyển sang aria-selected=true.`,
+          `Tab "${observedLabel}" không chuyển sang aria-selected=true.`,
           {
-            observedText: normalize(tab.textContent),
+            observedText: observedLabel,
             ariaSelected: tab.getAttribute("aria-selected"),
           },
         );
       }
     }
-    record(step, `Tab "${text}" đã selected.`);
-    return { ok: true };
+    record(step, `Tab "${observedLabel}" đã selected.`);
+    return { ok: true, label: observedLabel };
   };
 
   const modelSetupProfiles = {
@@ -561,20 +571,37 @@ export async function setInitialSettings(
     durationMode: setupProfile.durationMode,
     preferredDuration: setupProfile.preferredDuration,
   });
-  const settingsButton = await waitFor(() =>
-    Array.from(document.querySelectorAll("button")).find((button) => {
+  const findSettingsButton = () => {
+    // New Flow projects can now start in Image/Nano Banana mode. In that
+    // state the same composer settings trigger reads e.g.
+    // "Nano Banana 2 crop_16_9 x2", so waiting for a "Video" prefix can
+    // never succeed. Prefer the configurable structural XPath, then keep a
+    // DOM fallback for accounts receiving a slightly different rollout.
+    try {
+      const configured = document.evaluate(
+        selectors?.SETTINGS_BUTTON_XPATH || "",
+        document,
+        null,
+        XPathResult.FIRST_ORDERED_NODE_TYPE,
+        null,
+      ).singleNodeValue;
+      if (configured) return configured;
+    } catch {
+      // An invalid user override must not hide the safe structural fallback.
+    }
+    return Array.from(document.querySelectorAll("button")).find((button) => {
       const text = normalize(button.textContent);
       return (
         button.getAttribute("aria-haspopup") === "menu" &&
-        text.startsWith("Video") &&
         (text.includes("crop_9_16") || text.includes("crop_16_9"))
       );
-    }),
-  );
+    });
+  };
+  const settingsButton = await waitFor(findSettingsButton);
   if (!settingsButton) {
     return fail(
       "settings-button",
-      "Không tìm thấy nút cấu hình Video có tỷ lệ khung hình trong 10 giây.",
+      "Không tìm thấy nút cấu hình Image/Video có tỷ lệ khung hình trong 10 giây.",
     );
   }
   record(
@@ -588,15 +615,15 @@ export async function setInitialSettings(
     "Đã phát pointer/mouse events vào nút cấu hình, đang chờ menu.",
     { activation: settingsActivation },
   );
-  const menu = await waitFor(() =>
+  const findSettingsMenuWithTab = (label) =>
     Array.from(document.querySelectorAll('[role="menu"]')).find((candidate) =>
-      normalize(candidate.textContent).includes("Frames"),
-    ),
-  );
+      findByText('[role="tab"]', label, candidate),
+    );
+  let menu = await waitFor(() => findSettingsMenuWithTab("Video"));
   if (!menu) {
     return fail(
       "settings-menu",
-      "Đã kích hoạt nút cấu hình nhưng menu chứa “Frames” không xuất hiện trong 10 giây.",
+      "Đã kích hoạt nút cấu hình nhưng menu Image/Video không xuất hiện trong 10 giây.",
       { activation: settingsActivation },
     );
   }
@@ -604,6 +631,17 @@ export async function setInitialSettings(
 
   const videoResult = await clickTab("Video", menu);
   if (!videoResult.ok) return videoResult;
+  // Switching from Image to Video replaces the menu content. Re-acquire the
+  // active menu instead of relying on the pre-switch node remaining mounted.
+  menu = await waitFor(() => findSettingsMenuWithTab("Frames"), 5000);
+  if (!menu) {
+    return fail(
+      "video-mode",
+      "Đã chọn Video nhưng tuỳ chọn Frames không xuất hiện trong 5 giây.",
+      diagnostics().tabs,
+    );
+  }
+  record("video-mode", "Flow đã chuyển từ Image sang Video; menu Frames sẵn sàng.");
   const framesResult = await clickTab("Frames", menu);
   if (!framesResult.ok) return framesResult;
   const ratioLabel = aspectRatio === "portrait" ? "9:16" : "16:9";
@@ -612,10 +650,26 @@ export async function setInitialSettings(
     return ratioResult;
   }
 
-  const countLabel =
-    String(outputCount) === "1" ? "1x" : `x${String(outputCount)}`;
-  const countResult = await clickTab(countLabel, menu);
+  const normalizedOutputCount = String(outputCount);
+  // Flow changed the output tabs from 1x/2x/... to x1/x2/... in July 2026.
+  // Keep both aliases because projects/accounts can receive UI rollouts at
+  // different times.
+  const configuredCountLabels = String(
+    selectors?.OUTPUT_COUNT_FORMATS_TEXT || "",
+  )
+    .split("|")
+    .map((format) =>
+      normalize(format).replaceAll("{count}", normalizedOutputCount),
+    )
+    .filter(Boolean);
+  const countLabels = [...new Set([
+    ...configuredCountLabels,
+    `x${normalizedOutputCount}`,
+    `${normalizedOutputCount}x`,
+  ])];
+  const countResult = await clickTab(countLabels, menu);
   if (!countResult.ok) return countResult;
+  const countLabel = countResult.label;
 
   const desiredModel = setupProfile.modelLabel;
   const modelButton = await waitFor(() =>
@@ -1369,57 +1423,7 @@ export async function processImageAndPromptOnPage(options, selectors) {
     );
 
     if (!assetReady) {
-      let uploadMenu = null;
-      const addMediaButton = Array.from(
-        document.querySelectorAll("button"),
-      ).find((button) => {
-        const text = normalize(button.textContent);
-        return text.includes("add") && text.includes(TXT.addMedia);
-      });
-      if (addMediaButton) {
-        const addMediaActivation = activate(addMediaButton);
-        uploadMenu = await waitFor(
-          () =>
-            Array.from(document.querySelectorAll('[role="menu"]')).find(
-              (menu) => normalize(menu.textContent).includes(TXT.uploadMedia),
-            ),
-          3000,
-          80,
-        );
-        record(
-          `upload-menu:${role}`,
-          uploadMenu
-            ? "Đã mở menu Add Media."
-            : "Không thấy menu Add Media; vẫn thử input file trực tiếp.",
-          { activation: addMediaActivation },
-        );
-      }
-
-      if (uploadMenu) {
-        const uploadMediaTarget = Array.from(
-          uploadMenu.querySelectorAll(
-            '[role="menuitem"], [role="option"], button, [role="button"]',
-          ),
-        ).find((element) =>
-          normalize(element.textContent).includes(TXT.uploadMedia),
-        );
-        if (uploadMediaTarget) {
-          const uploadMediaActivation = activate(uploadMediaTarget);
-          record(
-            `upload-menu-option:${role}`,
-            "Đã kích hoạt mục “Upload media” trước khi gán file.",
-            { activation: uploadMediaActivation },
-          );
-          await new Promise((resolve) => setTimeout(resolve, 120));
-        } else {
-          record(
-            `upload-menu-option:${role}`,
-            "Menu Add Media đã mở nhưng không tìm thấy mục “Upload media”; thử input hiện có.",
-          );
-        }
-      }
-
-      const input = await waitFor(() => {
+      const findImageFileInput = () => {
         const inputs = Array.from(
           document.querySelectorAll('input[type="file"]'),
         );
@@ -1428,7 +1432,47 @@ export async function processImageAndPromptOnPage(options, selectors) {
             (candidate.accept || "").includes("image"),
           ) || inputs[inputs.length - 1]
         );
-      });
+      };
+      // Flow keeps an image input mounted even while the Add Media menu is
+      // closed. Using that hidden input avoids opening Chrome's native file
+      // chooser; clicking the visible "Upload media" item is unnecessary
+      // because the extension assigns FileList and dispatches change itself.
+      let input = findImageFileInput();
+      let uploadMenu = null;
+      if (!input) {
+        const addMediaButton = Array.from(
+          document.querySelectorAll("button"),
+        ).find((button) => {
+          const text = normalize(button.textContent);
+          return text.includes("add") && text.includes(TXT.addMedia);
+        });
+        if (addMediaButton) {
+          const addMediaActivation = activate(addMediaButton);
+          uploadMenu = await waitFor(
+            () =>
+              Array.from(document.querySelectorAll('[role="menu"]')).find(
+                (menu) =>
+                  normalize(menu.textContent).includes(TXT.uploadMedia),
+              ),
+            3000,
+            80,
+          );
+          record(
+            `upload-menu:${role}`,
+            uploadMenu
+              ? "Đã mở Add Media để tìm input ẩn; không kích hoạt file picker."
+              : "Không thấy menu Add Media; tiếp tục chờ input file ẩn.",
+            { activation: addMediaActivation },
+          );
+        }
+        input = await waitFor(findImageFileInput);
+      } else {
+        record(
+          `upload-input:${role}`,
+          "Đã tìm thấy input file ẩn; bỏ qua menu Upload media để không mở hộp chọn file.",
+        );
+      }
+
       if (!input) {
         return fail(
           "UPLOAD_INPUT_MISSING",

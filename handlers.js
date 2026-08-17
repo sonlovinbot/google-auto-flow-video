@@ -74,6 +74,40 @@ function swapImages(from, to) {
   }
 }
 
+function syncSelectedImageSummary() {
+  const count = state.imageFileList.length;
+  if (dom.imageCount) dom.imageCount.textContent = String(count);
+  if (dom.imageFileSummary) {
+    dom.imageFileSummary.style.display = count > 0 ? "block" : "none";
+  }
+}
+
+function removeSelectedImage(index) {
+  if (index < 0 || index >= state.imageFileList.length) return;
+  const [removed] = state.imageFileList.splice(index, 1);
+  const previewUrl = removed ? imagePreviewUrls.get(removed) : "";
+  if (previewUrl) {
+    URL.revokeObjectURL?.(previewUrl);
+    imagePreviewUrls.delete(removed);
+  }
+
+  // A native FileList cannot be edited in place. Clearing it ensures the user
+  // can later select the same files again, while imageFileList remains the
+  // canonical list shown by the panel.
+  if (dom.imageInput) dom.imageInput.value = null;
+  renderImagePromptPairs(true);
+  persistRowPrompts(currentFrameMode());
+  syncSelectedImageSummary();
+  updateFrameModeHint();
+  logMessage(
+    i18n("log_image_row_removed", {
+      index: index + 1,
+      filename: removed?.name || i18n("label_unknown_filename"),
+    }),
+    "warn",
+  );
+}
+
 function createMoveControls(index, total) {
   const box = document.createElement("div");
   box.className = "filmstrip-move";
@@ -132,6 +166,26 @@ function createImageRow(file, index, { total, roleKey, withPrompt, pair, reorder
   preview.alt = file.name;
   imagePicker.appendChild(preview);
 
+  const mediaWrap = document.createElement("div");
+  mediaWrap.className = "image-prompt-media-wrap";
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.className = "image-prompt-remove";
+  removeButton.setAttribute(
+    "aria-label",
+    i18n("image_row_delete_aria", { filename: file.name }),
+  );
+  removeButton.title = i18n("image_row_delete_aria", {
+    filename: file.name,
+  });
+  const removeGlyph = document.createElement("span");
+  removeGlyph.className = "material-symbols-outlined";
+  removeGlyph.setAttribute("aria-hidden", "true");
+  removeGlyph.textContent = "close";
+  removeButton.appendChild(removeGlyph);
+  removeButton.addEventListener("click", () => removeSelectedImage(index));
+  mediaWrap.append(imagePicker, removeButton);
+
   const replacementInput = document.createElement("input");
   replacementInput.type = "file";
   replacementInput.accept = "image/*";
@@ -181,7 +235,7 @@ function createImageRow(file, index, { total, roleKey, withPrompt, pair, reorder
     copy.appendChild(createPromptInput(pair, "single"));
   }
 
-  row.append(rowIndex, imagePicker, copy);
+  row.append(rowIndex, mediaWrap, copy);
   // Order only defines the pairing in frame modes; in single mode the arrows
   // would earn nothing and cost the prompt box 26px on a 340px panel.
   if (reorderable) row.appendChild(createMoveControls(index, total));
@@ -491,8 +545,7 @@ function handleImageSelection(event) {
   sortImageFiles(dom.imageSortSelector.value);
   state.imagePromptPairs = [];
   renderImagePromptPairs(false);
-  dom.imageCount.textContent = state.imageFileList.length;
-  dom.imageFileSummary.style.display = "block";
+  syncSelectedImageSummary();
   updateFrameModeHint();
   logImageSortOrder();
 }
